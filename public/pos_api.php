@@ -21,26 +21,18 @@ function &pos_cart_ref(){
 }
 
 function fetch_item_by_id($id){
-  if (method_exists('ItemsModel','findById')) {
-    $it = ItemsModel::findById($id);
-    if ($it) return $it;
-  }
-  if (method_exists('ItemsModel','get')) {
-    $it = ItemsModel::get($id);
-    if ($it) return $it;
-  }
-  try {
-    $db = db();
-    $st = $db->prepare("SELECT id, name, unit_price, stock FROM items WHERE id = ?");
-    $st->execute([$id]);
-    $row = $st->fetch(PDO::FETCH_ASSOC);
-    if ($row) return $row;
-  } catch (Throwable $e) { /* ignore */ }
-  if (method_exists('ItemsModel','search')) {
-    $rows = ItemsModel::search('', null, null, 200);
-    foreach ($rows as $r) { if ((int)$r['id'] === (int)$id) return $r; }
-  }
-  return null;
+  $db = db();
+  $st = $db->prepare("SELECT id, name, unit_price, stock, image_url FROM items WHERE id = ?");
+  $st->execute([(int)$id]);
+  $row = $st->fetch(PDO::FETCH_ASSOC);
+  if (!$row) return null;
+  return [
+    'id'         => (int)$row['id'],
+    'name'       => $row['name'],
+    'unit_price' => (float)$row['unit_price'],
+    'stock'      => isset($row['stock']) ? (float)$row['stock'] : null,
+    'image_url'  => $row['image_url'] ?? '',
+  ];
 }
 
 $enc = function($s){ return rawurlencode((string)$s); };
@@ -67,19 +59,29 @@ function calc_total_from_lines($lines, $discount, $tax){
   return $subtotal - (float)$discount + (float)$tax;
 }
 
+// ✅ تطبيع أسماء طرق الدفع للـDB (agyl → agel) والسماح بالقيم الجديدة
+function normalize_method($m){
+  $m = strtolower(trim((string)$m));
+  if ($m === 'agyl') return 'agel';
+  $allowed = ['cash','visa','instapay','vodafone_cash','agel','mixed'];
+  return in_array($m, $allowed, true) ? $m : 'mixed';
+}
+
 /* ===== قواعد الدفع:
    - أي توليفة طرق دفع.
-   - InstaPay مرجع إجباري.
+   - InstaPay و Vodafone Cash مرجع إجباري.
    - الزيادة مسموحة فقط لو من الكاش (بترجع كباقي).
 */
 function validate_payments_rules(array &$pays, float $total){
   foreach ($pays as $p) {
-    if (($p['method']??'')==='instapay' && trim((string)($p['ref_no']??''))==='') {
-      throw new Exception('رقم العملية/المرجع مطلوب لـ InstaPay.');
+    $method = strtolower(trim((string)($p['method'] ?? '')));
+    $ref    = trim((string)($p['ref_no'] ?? ''));
+    if (($method === 'instapay' || $method === 'vodafone_cash') && $ref === '') {
+      throw new Exception('رقم العملية/المرجع مطلوب لـ InstaPay/Vodafone Cash.');
     }
   }
   $sum = 0.0; foreach ($pays as $p) $sum += (float)($p['amount'] ?? 0);
-  $cashSum = 0.0; foreach ($pays as $p) if (($p['method']??'')==='cash') $cashSum += (float)($p['amount'] ?? 0);
+  $cashSum = 0.0; foreach ($pays as $p) if (strtolower((string)($p['method'] ?? ''))==='cash') $cashSum += (float)($p['amount'] ?? 0);
   $nonCash = $sum - $cashSum;
   $remainingAfterNonCash = $total - $nonCash;
   $changeDue = max(0, $cashSum - max(0, $remainingAfterNonCash));
@@ -102,10 +104,12 @@ try {
       echo json_encode(['ok'=>1, 'categories'=>$cats, 'subcategories'=>$subs]);
       break;
     }
+
     case 'search_categories': {
       echo json_encode(['ok'=>1, 'categories'=> ItemsModel::categories() ]);
       break;
     }
+
     case 'search_subcategories': {
       $cid = (isset($_GET['category_id']) && $_GET['category_id']!=='') ? (int)$_GET['category_id'] : null;
       $subs = method_exists('ItemsModel','subcategories') ? ItemsModel::subcategories($cid) : [];
@@ -122,62 +126,38 @@ try {
     /* --------- بحث الأصناف --------- */
     case 'search_items': {
       $q   = trim($_GET['q'] ?? '');
-      $cat = (isset($_GET['category_id'])    && $_GET['category_id']    !== '') ? (int)$_GET['category_id']    : null;
-      $sub = (isset($_GET['subcategory_id']) && $_GET['subcategory_id'] !== '') ? (int)$_GET['subcategory_id'] : null;
+      $cid = (int)($_GET['category_id'] ?? 0);
+      $sid = (int)($_GET['subcategory_id'] ?? 0);
 
-      $min = $_GET['min_price'] ?? ''; $max = $_GET['max_price'] ?? '';
-      $minp = ($min === '' ? null : (float)$min); $maxp = ($max === '' ? null : (float)$max);
+      $sql = "SELECT i.id, i.name, i.unit_price, i.stock, i.image_url
+              FROM items i
+              WHERE 1=1";
+      $p = [];
 
-      $rows = ItemsModel::search($q, $cat, $sub, 100);
-
-      // إثراء مرة واحدة لو أعمدة ناقصة
-      $needEnrich = [];
-      foreach ($rows as $r) {
-        if (!isset($r['unit_price']) || !array_key_exists('stock',$r)) {
-          $needEnrich[] = (int)$r['id'];
-        }
-      }
-      if ($needEnrich) {
-        $db = db();
-        $in = implode(',', array_fill(0, count($needEnrich), '?'));
-        $sql = "SELECT id, unit_price, default_price, stock FROM items WHERE id IN ($in)";
-        $st = $db->prepare($sql); $st->execute($needEnrich);
-        $map = [];
-        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $x) { $map[(int)$x['id']] = $x; }
-        foreach ($rows as &$r) {
-          $id = (int)$r['id'];
-          if (isset($map[$id])) {
-            foreach (['unit_price','stock'] as $c) {
-              if (!array_key_exists($c,$r)) $r[$c] = $map[$id][$c];
-            }
-          }
-        }
-        unset($r);
+      if ($cid > 0) { $sql .= " AND i.category_id = ?";    $p[] = $cid; }
+      if ($sid > 0) { $sql .= " AND i.subcategory_id = ?"; $p[] = $sid; }
+      if ($q !== '') {
+        $sql .= " AND (i.name LIKE ? OR i.sku LIKE ?)";
+        $p[] = "%$q%"; $p[] = "%$q%";
       }
 
-      $out = [];
-      foreach ($rows as $it) {
-        $unit = isset($it['unit_price']) ? (float)$it['unit_price'] : null;
-        $def  = isset($it['default_price']) ? (float)$it['default_price'] : null;
-        $price = $unit !== null && $unit !== 0.0 ? $unit : ($def ?? 0.0);
+      $sql .= " ORDER BY i.name ASC LIMIT 200";
+      $st = db()->prepare($sql);
+      $st->execute($p);
 
-        if ($minp !== null && $price < $minp) continue;
-        if ($maxp !== null && $price > $maxp) continue;
-
-        $out[] = [
-          'id'            => (int)$it['id'],
-          'name'          => $it['name'],
-          'sku'           => $it['sku'] ?? null,
-          'unit_price'    => $unit,
-          'price'         => $price,
-          'stock'         => array_key_exists('stock',$it) ? ($it['stock']===null? null : (float)$it['stock']) : null,
-          'category_id'   => isset($it['category_id']) ? (int)$it['category_id'] : (isset($it['cat_id'])?(int)$it['cat_id']:null),
-          'subcategory_id'=> isset($it['subcategory_id']) ? (int)$it['subcategory_id'] : (isset($it['sub_id'])?(int)$it['sub_id']:null),
+      $items = [];
+      while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
+        $items[] = [
+          'id'         => (int)$r['id'],
+          'name'       => $r['name'],
+          'unit_price' => (float)$r['unit_price'],
+          'stock'      => isset($r['stock']) ? (float)$r['stock'] : null,
+          'image_url'  => $r['image_url'] ?? '',
         ];
       }
 
-      echo json_encode(['ok'=>1, 'items'=>$out]);
-      break;
+      echo json_encode(['ok'=>true, 'items'=>$items], JSON_UNESCAPED_UNICODE);
+      exit;
     }
 
     /* --------- كارت Session --------- */
@@ -274,9 +254,8 @@ try {
       if (!$lines || !is_array($lines)) throw new Exception('No lines');
       foreach ($lines as $ln) { if (!isset($ln['item_id'],$ln['qty'],$ln['unit_price'])) throw new Exception('Bad line'); }
 
-      $pm = $body['payment_method'] ?? 'cash';
-      $allowed = ['cash','instapay','visa','wallet','mixed'];
-      if (!in_array($pm, $allowed, true)) { $pm = 'mixed'; }
+      // ✅ سماح بالقيم الجديدة + تطبيع
+      $pm = normalize_method($body['payment_method'] ?? 'cash');
 
       $payment = [
         'payment_method' => $pm,
@@ -285,8 +264,8 @@ try {
         'payment_ref'    => trim($body['payment_ref'] ?? ''),
         'payment_note'   => trim($body['payment_note'] ?? ''),
       ];
-      if ($pm === 'instapay' && $payment['payment_ref']==='') {
-        throw new Exception('مرجع InstaPay مطلوب');
+      if (($pm === 'instapay' || $pm === 'vodafone_cash') && $payment['payment_ref']==='') {
+        throw new Exception('مرجع مطلوب لمدفوعات InstaPay/Vodafone Cash');
       }
 
       $res = Sales::saveInvoice($u['id'], $cust_name, $cust_phone, $lines, $discount, $tax, $notes, $payment);
@@ -309,18 +288,32 @@ try {
       $total = calc_total_from_lines($lines, $discount, $tax);
       $change_due = validate_payments_rules($pays, $total);
 
+      // 🔁 Override من الواجهة لو متوفر
+      $save_override           = normalize_method($data['save_payment_method'] ?? '');
+      $payment_note_override   = trim((string)($data['payment_note'] ?? ''));
+
+      // الوضع الافتراضي كما هو
       $normMethod   = null; $paid_cash=0.0; $payment_ref=''; $payment_note='';
+
       if (count($pays) === 1) {
         $p = $pays[0];
-        $normMethod = $p['method'] ?: 'cash';
-        if ($normMethod === 'cash') $paid_cash = (float)$p['amount'];
+        $normMethod = normalize_method($p['method'] ?? 'cash');
+        if ($normMethod === 'cash') $paid_cash = (float)($p['amount'] ?? 0);
         else $payment_ref = trim((string)($p['ref_no'] ?? ''));
         $payment_note = trim((string)($p['note'] ?? ''));
       } else {
         $normMethod = 'mixed';
-        foreach ($pays as $p) if (($p['method'] ?? '')==='cash') $paid_cash += (float)($p['amount'] ?? 0);
-        foreach ($pays as $p) { if (($p['method'] ?? '')!=='cash') { $payment_ref = trim((string)($p['ref_no'] ?? '')); if ($payment_ref) break; } }
+        foreach ($pays as $p) if (normalize_method($p['method'] ?? '')==='cash') $paid_cash += (float)($p['amount'] ?? 0);
+        foreach ($pays as $p) { if (normalize_method($p['method'] ?? '')!=='cash') { $payment_ref = trim((string)($p['ref_no'] ?? '')); if ($payment_ref) break; } }
         $payment_note = $encodeMultiPayments($pays);
+      }
+
+      // ✅ احترام override القادم من الواجهة
+      if ($save_override && $save_override !== 'mixed') {
+        $normMethod = $save_override;
+      }
+      if ($payment_note_override !== '') {
+        $payment_note = $payment_note_override;
       }
 
       $res = Sales::saveInvoice(
@@ -368,21 +361,34 @@ try {
       $total = calc_total_from_lines($lines, $discount, $tax);
       $change_due = validate_payments_rules($pays, $total);
 
+      // 🔁 Override من الواجهة لو متوفر
+      $save_override           = normalize_method($body['save_payment_method'] ?? '');
+      $payment_note_override   = trim((string)($body['payment_note'] ?? ''));
+
       $normMethod   = null; $paid_cash=0.0; $payment_ref=''; $payment_note='';
+
       if (count($pays)===1) {
         $p = $pays[0];
-        $normMethod = $p['method'] ?: 'cash';
+        $normMethod = normalize_method($p['method'] ?? 'cash');
         if ($normMethod==='cash') $paid_cash = (float)($p['amount'] ?? 0);
         else $payment_ref = trim((string)($p['ref_no'] ?? ''));
         $payment_note = trim((string)($p['note'] ?? ''));
       } else {
         $normMethod = 'mixed';
-        foreach ($pays as $p) if (($p['method'] ?? '')==='cash') $paid_cash += (float)($p['amount'] ?? 0);
-        foreach ($pays as $p) { if (($p['method'] ?? '')!=='cash') { $payment_ref = trim((string)($p['ref_no'] ?? '')); if ($payment_ref) break; } }
+        foreach ($pays as $p) if (normalize_method($p['method'] ?? '')==='cash') $paid_cash += (float)($p['amount'] ?? 0);
+        foreach ($pays as $p) { if (normalize_method($p['method'] ?? '')!=='cash') { $payment_ref = trim((string)($p['ref_no'] ?? '')); if ($payment_ref) break; } }
         $payment_note = $encodeMultiPayments($pays);
       }
 
-      // 👇 الجديد: تم تمرير اسم/موبايل العميل هنا
+      // ✅ احترام override القادم من الواجهة
+      if ($save_override && $save_override !== 'mixed') {
+        $normMethod = $save_override;
+      }
+      if ($payment_note_override !== '') {
+        $payment_note = $payment_note_override;
+      }
+
+      // 👇 تم تمرير اسم/موبايل العميل هنا
       $res = Sales::saveInvoice(
         $u['id'], $cust_name, $cust_phone, $lines, $discount, $tax, '',
         [

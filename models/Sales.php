@@ -18,6 +18,14 @@ class Sales
         return $pref . str_pad((string)$n, 4, '0', STR_PAD_LEFT);
     }
 
+    // تطبيع اسم وسماح بالقيم الجديدة (agyl -> agel)
+    private static function normalizePM(?string $pm): string {
+        $pm = strtolower(trim((string)$pm));
+        if ($pm === 'agyl') $pm = 'agel';
+        $allowed = ['cash','visa','instapay','vodafone_cash','agel','mixed'];
+        return in_array($pm, $allowed, true) ? $pm : 'mixed';
+    }
+
     // البحث أو إنشاء عميل بسيط بالاسم/التليفون
     private static function upsertCustomer(PDO $db, string $name, string $phone): ?int {
         $name  = trim($name);
@@ -67,12 +75,7 @@ class Sales
             $customer_id = self::upsertCustomer($db, $customer_name, $customer_phone);
 
             // الدفع
-            // القيم المقبولة، وأي قيمة غريبة نطبعها إلى mixed
-            $pm = $payment['payment_method'] ?? 'cash';
-            $allowed = ['cash','instapay','wallet','visa','mixed'];
-            if (!in_array($pm, $allowed, true)) {
-                $pm = 'mixed';
-            }
+            $pm = self::normalizePM($payment['payment_method'] ?? 'cash');
 
             $paid_amount  = 0.0;          // إجمالي المقبوض
             $change_due   = 0.0;          // الباقي نقدًا
@@ -88,17 +91,18 @@ class Sales
                 }
                 $paid_amount = $paid_cash;
 
-            } elseif ($pm === 'instapay' || $pm === 'wallet' || $pm === 'visa') {
-                // طريقة غير نقدية واحدة: نعتبرها دفع كامل (الـAPI ضمن توازن المدفوعات)
-                if ($pm === 'instapay') {
-                    $payment_ref = trim($payment['payment_ref'] ?? '');
+            } elseif ($pm === 'instapay' || $pm === 'visa' || $pm === 'vodafone_cash' || $pm === 'agel') {
+                // طريقة واحدة غير كاش (أو آجل): نعتبر الفاتورة Paid بالكامل (التحقق تم في الـAPI)
+                // مرجع مطلوب لِـ Instapay و Vodafone Cash
+                if ($pm === 'instapay' || $pm === 'vodafone_cash') {
+                    $payment_ref = trim((string)($payment['payment_ref'] ?? ''));
                     if ($payment_ref === '') {
-                        throw new Exception('مرجع التحويل مطلوب.');
+                        throw new Exception('مرجع التحويل مطلوب لـ InstaPay/Vodafone Cash.');
                     }
                 } else {
-                    $payment_ref = trim($payment['payment_ref'] ?? '') ?: null;
+                    $payment_ref = trim((string)($payment['payment_ref'] ?? '')) ?: null;
                 }
-                $payment_note = trim($payment['payment_note'] ?? '') ?: null;
+                $payment_note = trim((string)($payment['payment_note'] ?? '')) ?: null;
                 $paid_amount  = $total;
                 $change_due   = 0.0;
 
@@ -106,8 +110,8 @@ class Sales
                 // دفع مُجزّأ: نعتمد القيم القادمة من الـAPI بعد التحقق هناك
                 $paid_cash    = (float)($payment['paid_cash'] ?? 0);
                 $change_due   = max(0, (float)($payment['change_due'] ?? 0));
-                $payment_ref  = trim($payment['payment_ref'] ?? '') ?: null;  // أول مرجع غير كاش إن وجد
-                $payment_note = trim($payment['payment_note'] ?? '') ?: null; // غالبًا MULTI;method,amount,...
+                $payment_ref  = trim((string)($payment['payment_ref'] ?? '')) ?: null;  // أول مرجع غير كاش إن وجد
+                $payment_note = trim((string)($payment['payment_note'] ?? '')) ?: null; // غالبًا MULTI;method,amount,...
 
                 // بما إن الـAPI متأكد إن إجمالي المدفوعات يساوي الإجمالي (+/− الباقي من الكاش فقط)
                 // فنسجل الفاتورة Paid بالكامل:
@@ -134,7 +138,7 @@ class Sales
                 ':discount'       => $discount,
                 ':tax'            => $tax,
                 ':total'          => $total,
-                ':payment_method' => $pm,
+                ':payment_method' => $pm,           // ✅ هتكون cash/visa/instapay/vodafone_cash/agel/mixed
                 ':paid_amount'    => $paid_amount,
                 ':change_due'     => $change_due,
                 ':payment_ref'    => $payment_ref,
@@ -190,4 +194,11 @@ class Sales
             throw $e;
         }
     }
+}
+
+// (اختياري قديم عندك)
+function table_has_col(PDO $db, string $table, string $col): bool {
+  $st=$db->prepare("SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?");
+  $st->execute([$table,$col]);
+  return (bool)$st->fetchColumn();
 }
