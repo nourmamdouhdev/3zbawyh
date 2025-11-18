@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/helpers.php';
 require_login();
-if (function_exists('is_cashier') && is_cashier()) { header('Location: /3zbawyh/public/pos.php'); exit; }
+require_admin_or_redirect();
 
 date_default_timezone_set('Africa/Cairo');
 $db = db();

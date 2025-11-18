@@ -121,7 +121,7 @@ function require_role($role) {
 function require_admin_or_redirect() {
     require_login();
     if (!is_admin()) {
-        header('Location: /3zbawyh/public/pos.php');
+        header('Location: /3zbawyh/public/no_access.php');
         exit;
     }
 }

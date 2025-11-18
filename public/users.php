@@ -74,11 +74,83 @@ $rows = $pdo->query("
 <head>
   <meta charset="utf-8">
   <title>إدارة المستخدمين - العزباوية</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/3zbawyh/assets/style.css">
   <style>
     .muted{color:#666}
     .badge{padding:2px 6px;border-radius:6px;background:#eee}
     input.input[type=password]{direction:ltr}
+
+    /* غلاف للجدول عشان الـ scroll في الموبايل */
+    .table-wrapper{
+      width:100%;
+      overflow-x:auto;
+    }
+
+    /* تعديلات الريسبونسيف */
+    @media (max-width: 768px){
+      .container{
+        padding:8px;
+      }
+
+      .nav{
+        flex-direction:column;
+        align-items:flex-start;
+        gap:8px;
+      }
+
+      .nav ul{
+        flex-wrap:wrap;
+        width:100%;
+      }
+
+      .nav ul li{
+        flex:1 1 auto;
+      }
+
+      .card{
+        padding:12px;
+      }
+
+      .form-row{
+        flex-direction:column;
+        align-items:stretch;
+      }
+
+      .form-row > div,
+      .form-row .btn{
+        width:100%;
+      }
+
+      .form-row .btn{
+        margin-top:8px;
+      }
+
+      .table th,
+      .table td{
+        font-size:14px;
+        white-space:nowrap;
+      }
+
+      /* خلي فورمم الإجراءات تنزل تحت بعض في الموبايل */
+      .actions-cell{
+        display:flex;
+        flex-direction:column;
+        gap:6px;
+      }
+
+      .actions-cell form{
+        width:100%;
+      }
+
+      .actions-cell .input{
+        width:100% !important;
+      }
+
+      .actions-cell .btn{
+        width:100%;
+      }
+    }
   </style>
 </head>
 <body>
@@ -106,11 +178,12 @@ $rows = $pdo->query("
         <label>الباسورد</label>
         <input class="input" type="password" name="password" required>
       </div>
-      <div>
+      <div style="flex:1;min-width:150px">
         <label>الدور</label>
         <select class="input" name="role">
           <option value="cashier">cashier</option>
           <option value="admin">admin</option>
+          <option value="Manger">Manger</option>
         </select>
       </div>
       <button class="btn" type="submit">إنشاء</button>
@@ -119,42 +192,44 @@ $rows = $pdo->query("
 
   <div class="card" style="margin-top:12px">
     <h3>قائمة المستخدمين</h3>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>المستخدم</th>
-          <th>الدور</th>
-          <th>الحالة</th>
-          <th>أُنشئ في</th>
-          <th>إجراءات</th>
-        </tr>
-      </thead>
-      <tbody>
-      <?php foreach($rows as $r): ?>
-        <tr>
-          <td><?=e($r['id'])?></td>
-          <td><?=e($r['username'])?></td>
-          <td><span class="badge"><?=e($r['role_name'])?></span></td>
-          <td><?= $r['is_active'] ? '✅ مفعل' : '❌ معطل' ?></td>
-          <td class="muted"><?=e($r['created_at'])?></td>
-          <td style="display:flex;gap:6px">
-            <form method="post" onsubmit="return confirm('تأكيد تغيير الحالة؟')">
-              <input type="hidden" name="act" value="toggle">
-              <input type="hidden" name="id" value="<?=e($r['id'])?>">
-              <button class="btn secondary" type="submit"><?= $r['is_active'] ? 'تعطيل' : 'تفعيل' ?></button>
-            </form>
-            <form method="post" onsubmit="return confirm('تأكيد إعادة الباسورد؟')">
-              <input type="hidden" name="act" value="resetpw">
-              <input type="hidden" name="id" value="<?=e($r['id'])?>">
-              <input class="input" type="password" name="newpw" placeholder="باسورد جديد" style="width:150px">
-              <button class="btn" type="submit">إعادة تعيين</button>
-            </form>
-          </td>
-        </tr>
-      <?php endforeach; ?>
-      </tbody>
-    </table>
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>المستخدم</th>
+            <th>الدور</th>
+            <th>الحالة</th>
+            <th>أُنشئ في</th>
+            <th>إجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+        <?php foreach($rows as $r): ?>
+          <tr>
+            <td><?=e($r['id'])?></td>
+            <td><?=e($r['username'])?></td>
+            <td><span class="badge"><?=e($r['role_name'])?></span></td>
+            <td><?= $r['is_active'] ? '✅ مفعل' : '❌ معطل' ?></td>
+            <td class="muted"><?=e($r['created_at'])?></td>
+            <td class="actions-cell">
+              <form method="post" onsubmit="return confirm('تأكيد تغيير الحالة؟')">
+                <input type="hidden" name="act" value="toggle">
+                <input type="hidden" name="id" value="<?=e($r['id'])?>">
+                <button class="btn secondary" type="submit"><?= $r['is_active'] ? 'تعطيل' : 'تفعيل' ?></button>
+              </form>
+              <form method="post" onsubmit="return confirm('تأكيد إعادة الباسورد؟')">
+                <input type="hidden" name="act" value="resetpw">
+                <input type="hidden" name="id" value="<?=e($r['id'])?>">
+                <input class="input" type="password" name="newpw" placeholder="باسورد جديد" style="width:150px">
+                <button class="btn" type="submit">إعادة تعيين</button>
+              </form>
+            </td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <footer class="footer">

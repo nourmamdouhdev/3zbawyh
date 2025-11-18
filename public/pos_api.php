@@ -3,7 +3,7 @@ require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/helpers.php';
 require_once __DIR__ . '/../models/Items.php';
 require_once __DIR__ . '/../models/Sales.php';
-require_role_in_or_redirect(['admin','cashier']);
+require_role_in_or_redirect(['admin','cashier','Manger']);
 require_login();
 
 header('Content-Type: application/json; charset=utf-8');

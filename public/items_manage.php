@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/helpers.php';
 require_login();
-require_role_in_or_redirect(['admin']);
+require_role_in_or_redirect(['admin','Manger']);
 $db = db();
 
 /** Helpers */
@@ -155,10 +155,7 @@ try{
     if($hasReorder){ $sets[]='reorder_level=?'; $vals[] = (int)($_POST['reorder_level'] ?? 0); }
     if($hasStock){   $sets[]='stock=?';         $vals[] = (int)($_POST['stock'] ?? 0); }
 
-    // منطق الصورة:
-    // - لو المختار "حذف الصورة" نضع NULL ونحذف الملف إن وُجد.
-    // - وإلا لو فيه رفع جديد نكتب الجديد ونحذف القديم إن وُجد.
-    // - وإلا نترك القديم كما هو.
+    // منطق الصورة
     if($hasImage){
       $remove = isset($_POST['remove_image']) && $_POST['remove_image']=='1';
       if ($remove) {
@@ -239,6 +236,7 @@ if(isset($_GET['edit'])){
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>الأصناف</title>
 <link rel="stylesheet" href="/3zbawyh/assets/style.css">
 <style>
@@ -292,17 +290,35 @@ if(isset($_GET['edit'])){
     box-shadow:0 0 0 3px #cfe2ff55;
   }
 
-  /* فلاتر أعلى الجدول */
+  /* ===== Responsive Filters ===== */
   .filters{
     display:grid;
-    grid-template-columns: 1fr 220px 220px 120px;
+    grid-template-columns: repeat(12, 1fr);
     gap:8px; align-items:center;
   }
+  .filters .q   { grid-column: 1 / -1; }
+  .filters .cat { grid-column: 1 / -1; }
+  .filters .sub { grid-column: 1 / -1; }
+  .filters .go  { grid-column: 1 / -1; }
 
-  /* شبكة الفورم مرتبة */
+  @media (min-width:640px){
+    .filters .q  { grid-column: 1 / -1; }
+    .filters .cat{ grid-column: 1 / 7; }
+    .filters .sub{ grid-column: 7 / -2; }
+    .filters .go { grid-column: -2 / -1; }
+  }
+
+  @media (min-width:920px){
+    .filters .q  { grid-column: 1 / 7; }
+    .filters .cat{ grid-column: 7 / 10; }
+    .filters .sub{ grid-column: 10 / 12; }
+    .filters .go { grid-column: 12 / 13; }
+  }
+
+  /* ===== Form Grid ===== */
   .form-grid{
     display:grid;
-    grid-template-columns:repeat(6,1fr);
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap:10px;
   }
   .form-grid > label{ display:block; font-size:13px; color:#555; }
@@ -310,25 +326,32 @@ if(isset($_GET['edit'])){
   .form-grid > label > select,
   .form-grid > label > input[type="file"]{ margin-top:6px; }
 
+  .form-grid .form-actions{
+    grid-column: 1 / -1;
+    display:flex; flex-wrap:wrap; gap:8px;
+  }
+
   .pill{
     display:inline-block; padding:4px 10px; border-radius:999px;
     background:#f6f7fb; border:1px solid #eee; color:#333; font-weight:600; font-size:12px;
   }
 
-  /* جدول مرتب بدون تغيير شكل جذري */
-  table.table{ width:100%; border-collapse:separate; border-spacing:0 8px; }
+  /* ===== Table ===== */
+  .table-wrap{ overflow-x:auto; -webkit-overflow-scrolling: touch; }
+  table.table{ width:100%; border-collapse:separate; border-spacing:0 8px; min-width:720px; }
   .table thead th{
     text-align:start; font-size:12px; color:#667; font-weight:700;
-    padding:0 10px 6px;
+    padding:0 10px 6px; white-space:nowrap;
   }
   .table tbody tr{
     background:#fff; border:1px solid var(--bd); border-radius:12px;
   }
   .table tbody tr > td{
-    padding:10px; border-top:1px solid var(--bd);
+    padding:10px; border-top:1px solid var(--bd); white-space:nowrap;
   }
   .table tbody tr > td:first-child{
     border-start-start-radius:12px; border-end-start-radius:12px; border-right:0;
+    position: sticky; inset-inline-start: 0; background: #fff; z-index: 1; /* sticky ID */
   }
   .table tbody tr > td:last-child{
     border-start-end-radius:12px; border-end-end-radius:12px; border-left:0;
@@ -340,37 +363,44 @@ if(isset($_GET['edit'])){
   .alert-ok{ background:#ecfdf5; border:1px solid #c7f3e3; }
   .alert-err{ background:#fef2f2; border:1px solid #f9cccc; }
 
-  /* أزرار الإجراءات في الجدول مضغوطة */
-  .row-actions{ display:flex; gap:8px; align-items:center; }
+  /* أزرار الإجراءات في الجدول مضغوطة وتتفك على الشاشات الصغيرة */
+  .row-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+  /* إخفاء أعمدة قليلة الأهمية على الشاشات الأصغر */
+  @media (max-width:640px){
+    .col-image, .col-sku, .col-reorder, .col-sub { display:none; }
+    .btn{ padding:8px 12px; border-radius:10px; }
+    .img-thumb{ width:40px; height:40px; }
+  }
 </style>
 
 </head>
 <body>
 <div class="container">
   <h2>الأصناف</h2>
-  <?php if($msg): ?><div class="card" style="background:#ecfdf5"><?=e($msg)?></div><?php endif; ?>
-  <?php if($err): ?><div class="card" style="background:#fef2f2">خطأ: <?=e($err)?></div><?php endif; ?>
+  <?php if($msg): ?><div class="card alert-ok"><?=e($msg)?></div><?php endif; ?>
+  <?php if($err): ?><div class="card alert-err">خطأ: <?=e($err)?></div><?php endif; ?>
 
   <!-- Filters -->
-  <form method="get" class="card" style="display:grid;grid-template-columns:1fr 220px 220px 120px;gap:8px;align-items:center">
-    <input class="input" name="q" value="<?=e($q)?>" placeholder="بحث بالاسم<?= $hasSKU? '/الكود':'' ?>">
-    <select class="input" id="f_category" name="category_id" <?= $hasCatId? '':'disabled' ?>>
+  <form method="get" class="card filters">
+    <input class="input q" name="q" value="<?=e($q)?>" placeholder="بحث بالاسم<?= $hasSKU? '/الكود':'' ?>">
+    <select class="input cat" id="f_category" name="category_id" <?= $hasCatId? '':'disabled' ?>>
       <option value=""><?= $hasCatId? 'كل التصنيفات':'التصنيفات غير مفعّلة' ?></option>
       <?php foreach($cats as $c): ?>
         <option value="<?=$c['id']?>" <?= ($cat===$c['id'])?'selected':'' ?>><?=e($c['name'])?></option>
       <?php endforeach; ?>
     </select>
-    <select class="input" id="f_subcategory" name="subcategory_id" <?= $hasSubcatId? '':'disabled' ?>>
+    <select class="input sub" id="f_subcategory" name="subcategory_id" <?= $hasSubcatId? '':'disabled' ?>>
       <option value="">كل الفروع</option>
     </select>
-    <button class="btn">بحث</button>
+    <button class="btn go">بحث</button>
   </form>
 
   <!-- Form -->
   <div class="card">
     <h3><?= $editing? 'تعديل صنف':'إضافة صنف' ?></h3>
     <!-- مهم: enctype للرفع -->
-    <form method="post" class="grid" enctype="multipart/form-data">
+    <form method="post" class="form-grid" enctype="multipart/form-data">
       <input type="hidden" name="action" value="<?= $editing? 'update':'create' ?>">
       <?php if($editing): ?><input type="hidden" name="id" value="<?=$editing['id']?>"><?php endif; ?>
 
@@ -435,7 +465,7 @@ if(isset($_GET['edit'])){
       </label>
       <?php endif; ?>
 
-      <div style="grid-column:1/-1">
+      <div class="form-actions">
         <button class="btn" type="submit"><?= $editing? 'تحديث':'إضافة' ?></button>
         <?php if($editing): ?><a class="btn secondary" href="?">إلغاء</a><?php endif; ?>
       </div>
@@ -445,64 +475,68 @@ if(isset($_GET['edit'])){
   <!-- List -->
   <div class="card">
     <h3>قائمة الأصناف (<?=count($list)?>)</h3>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>#</th><th>الاسم</th>
-          <?php if($hasImage): ?><th>صورة</th><?php endif; ?>
-          <?php if($hasSKU): ?><th>SKU</th><?php endif; ?>
-          <?php if($hasPrice): ?><th>السعر</th><?php endif; ?>
-          <?php if($hasStock): ?><th>المخزون</th><?php endif; ?>
-          <?php if($hasCatId): ?><th>التصنيف</th><?php endif; ?>
-          <?php if($hasSubcatId): ?><th>الفرعي</th><?php endif; ?>
-          <?php if($hasReorder): ?><th>حد إعادة الطلب</th><?php endif; ?>
-          <th>إجراءات</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php foreach($list as $it): ?>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
           <tr>
-            <td><?=$it['id']?></td>
-            <td><?=e($it['name'])?></td>
-
-            <?php if($hasImage): ?>
-              <td>
-                <?php if(!empty($it['image_url'])): ?>
-                  <img src="<?= e($it['image_url']) ?>" alt="" class="img-thumb">
-                <?php else: ?>
-                  <span class="pill">—</span>
-                <?php endif; ?>
-              </td>
-            <?php endif; ?>
-
-            <?php if($hasSKU): ?><td><?=e($it['sku'])?></td><?php endif; ?>
-            <?php if($hasPrice): ?><td><?= $it['unit_price']!==null ? number_format((float)$it['unit_price'],2) : '—' ?></td><?php endif; ?>
-            <?php if($hasStock): ?>
-              <td>
-                <?php
-                  $stk = (int)($it['stock'] ?? 0);
-                  $low = ($hasReorder && isset($it['reorder_level']) && $stk <= (int)$it['reorder_level']);
-                ?>
-                <span class="pill" style="<?= $low ? 'background:#fff7ed;border-color:#fbbf24' : '' ?>">
-                  <?= $stk ?>
-                </span>
-              </td>
-            <?php endif; ?>
-            <?php if($hasCatId): ?><td><span class="pill"><?=e($it['category_name'] ?? '—')?></span></td><?php endif; ?>
-            <?php if($hasSubcatId): ?><td><span class="pill"><?=e($it['subcategory_name'] ?? '—')?></span></td><?php endif; ?>
-            <?php if($hasReorder): ?><td><?= (int)($it['reorder_level'] ?? 0) ?></td><?php endif; ?>
-            <td>
-              <a class="btn" href="?edit=<?=$it['id']?>">تعديل</a>
-              <form method="post" style="display:inline" onsubmit="return confirm('حذف الصنف؟');">
-                <input type="hidden" name="action" value="delete">
-                <input type="hidden" name="id" value="<?=$it['id']?>">
-                <button class="btn" type="submit">حذف</button>
-              </form>
-            </td>
+            <th>#</th><th>الاسم</th>
+            <?php if($hasImage): ?><th class="col-image">صورة</th><?php endif; ?>
+            <?php if($hasSKU): ?><th class="col-sku">SKU</th><?php endif; ?>
+            <?php if($hasPrice): ?><th class="col-price">السعر</th><?php endif; ?>
+            <?php if($hasStock): ?><th class="col-stock">المخزون</th><?php endif; ?>
+            <?php if($hasCatId): ?><th class="col-cat">التصنيف</th><?php endif; ?>
+            <?php if($hasSubcatId): ?><th class="col-sub">الفرعي</th><?php endif; ?>
+            <?php if($hasReorder): ?><th class="col-reorder">حد إعادة الطلب</th><?php endif; ?>
+            <th>إجراءات</th>
           </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          <?php foreach($list as $it): ?>
+            <tr>
+              <td><?=$it['id']?></td>
+              <td><?=e($it['name'])?></td>
+
+              <?php if($hasImage): ?>
+                <td class="col-image">
+                  <?php if(!empty($it['image_url'])): ?>
+                    <img src="<?= e($it['image_url']) ?>" alt="" class="img-thumb">
+                  <?php else: ?>
+                    <span class="pill">—</span>
+                  <?php endif; ?>
+                </td>
+              <?php endif; ?>
+
+              <?php if($hasSKU): ?><td class="col-sku"><?=e($it['sku'])?></td><?php endif; ?>
+              <?php if($hasPrice): ?><td class="col-price"><?= $it['unit_price']!==null ? number_format((float)$it['unit_price'],2) : '—' ?></td><?php endif; ?>
+              <?php if($hasStock): ?>
+                <td class="col-stock">
+                  <?php
+                    $stk = (int)($it['stock'] ?? 0);
+                    $low = ($hasReorder && isset($it['reorder_level']) && $stk <= (int)$it['reorder_level']);
+                  ?>
+                  <span class="pill" style="<?= $low ? 'background:#fff7ed;border-color:#fbbf24' : '' ?>">
+                    <?= $stk ?>
+                  </span>
+                </td>
+              <?php endif; ?>
+              <?php if($hasCatId): ?><td class="col-cat"><span class="pill"><?=e($it['category_name'] ?? '—')?></span></td><?php endif; ?>
+              <?php if($hasSubcatId): ?><td class="col-sub"><span class="pill"><?=e($it['subcategory_name'] ?? '—')?></span></td><?php endif; ?>
+              <?php if($hasReorder): ?><td class="col-reorder"><?= (int)($it['reorder_level'] ?? 0) ?></td><?php endif; ?>
+              <td>
+                <div class="row-actions">
+                  <a class="btn" href="?edit=<?=$it['id']?>">تعديل</a>
+                  <form method="post" style="display:inline" onsubmit="return confirm('حذف الصنف؟');">
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="id" value="<?=$it['id']?>">
+                    <button class="btn danger" type="submit">حذف</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 

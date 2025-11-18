@@ -3,7 +3,7 @@
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/helpers.php';
 require_login();
-require_role_in_or_redirect(['admin','cashier']);
+require_role_in_or_redirect(['admin','cashier','Manger']);
 
 if (!isset($_SESSION['pos_flow'])) {
   $_SESSION['pos_flow'] = [];

@@ -3,7 +3,7 @@ require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/helpers.php';
 
 require_login();
-require_role_in_or_redirect(['admin']);
+require_role_in_or_redirect(['admin','Manger']);
 
 $db = db();
 
@@ -142,59 +142,81 @@ if ($hasCategories && isset($_GET['edit'])) {
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>إدارة التصنيفات</title>
 <link rel="stylesheet" href="/3zbawyh/assets/style.css">
 <style>
-/* ——— واجهة واضحة ومقسّمة ——— */
 :root{
   --ink:#0f172a; --muted:#64748b; --bd:#e2e8f0; --card:#ffffff;
   --ok:#16a34a; --warn:#b91c1c; --pri:#111827; --bg:#f8fafc;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);font-family:system-ui}
+html,body{margin:0;padding:0}
+body{background:var(--bg);font-family:system-ui, -apple-system, "Noto Kufi Arabic","Cairo",sans-serif;color:var(--ink);line-height:1.55}
+
 .container{max-width:1180px;margin:24px auto;padding:0 14px}
-.page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap}
 .breadcrumb{color:var(--muted);font-size:14px}
 .helper{font-size:13px;color:var(--muted)}
+
 .layout{display:grid;grid-template-columns:380px 1fr;gap:16px}
-@media (max-width: 1100px){ .layout{grid-template-columns:1fr} }
+@media (max-width:1100px){ .layout{grid-template-columns:1fr} }
+
 .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px}
 .card h3{margin:0 0 6px}
-.section-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.section-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px;flex-wrap:wrap}
 .step-title{font-weight:700}
-.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--bd);padding:4px 8px;border-radius:999px;font-size:12px;background:#f1f5f9}
+.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--bd);padding:4px 8px;border-radius:999px;font-size:12px;background:#f1f5f9;white-space:nowrap}
 .badge.ok{background:#ecfdf5;border-color:#bbf7d0}
 .badge.off{background:#fee2e2;border-color:#fecaca}
-.kv{display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:center}
+
+.kv{display:grid;grid-template-columns:140px 1fr;gap:10px;align-items:center}
 .kv .hint{grid-column:2/span 1;color:var(--muted);font-size:12px;margin-top:-6px}
+@media (max-width:720px){
+  .kv{grid-template-columns:1fr;gap:6px}
+  .kv > label{margin-top:6px}
+  .kv .hint{grid-column:1/-1;margin-top:-2px}
+}
+
 .input, select, textarea{width:100%;padding:10px;border:1px solid var(--bd);border-radius:10px;background:#fff}
-.input:focus{outline:none;border-color:#94a3b8;box-shadow:0 0 0 3px #e2e8f0}
+.input:focus, select:focus, textarea:focus{outline:none;border-color:#94a3b8;box-shadow:0 0 0 3px #e2e8f0}
+
 .btn{background:#111;color:#fff;border:none;border-radius:10px;padding:10px 14px;cursor:pointer}
 .btn.secondary{background:#f1f5f9;color:#111;border:1px solid var(--bd)}
 .btn.min{padding:8px 10px}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
+
 .divider{height:1px;background:var(--bd);margin:12px 0}
-.table-wrap{overflow:auto}
+
+.search-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.search-row .input{flex:1;min-width:220px}
+
+.table-wrap{overflow:auto;-webkit-overflow-scrolling:touch}
 .table{width:100%;border-collapse:separate;border-spacing:0}
-.table thead th{background:#f8fafc;border-bottom:1px solid var(--bd);text-align:right;padding:10px;font-size:13px;color:#0f172a}
-.table tbody td{padding:10px;border-bottom:1px solid #eef2f7;vertical-align:middle}
+.table thead th{background:#f8fafc;border-bottom:1px solid var(--bd);text-align:right;padding:10px;font-size:13px;color:#0f172a;white-space:nowrap}
+.table tbody td{padding:10px;border-bottom:1px solid #eef2f7;vertical-align:middle;white-space:nowrap}
+.table tbody tr:last-child td{border-bottom:0}
+.table .col-desc{max-width:420px;white-space:normal}
+@media (max-width:640px){
+  .table{min-width:720px}
+  /* إخفاء أعمدة قليلة الأهمية في قائمة الكل */
+  .hide-sm{display:none}
+}
+
 .caption{font-size:12px;color:var(--muted);margin-bottom:8px}
 .empty{display:flex;align-items:center;gap:10px;background:#f8fafc;border:1px dashed var(--bd);padding:12px;border-radius:12px;color:#475569}
-.note{font-size:12px;color:var(--muted)}
-.search-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.tooltip{color:#334155;border-bottom:1px dotted #94a3b8;cursor:help}
 .small{font-size:12px;color:var(--muted)}
+
 </style>
 </head>
 <body>
 <div class="container">
 
-  <!-- رأس الصفحة: ماذا تفعل هذه الصفحة؟ -->
+  <!-- رأس الصفحة -->
   <div class="page-head">
     <div>
       <div class="breadcrumb">لوحة التحكم › المنتجات › <strong>التصنيفات</strong></div>
       <h2 style="margin:4px 0 6px">إدارة التصنيفات</h2>
-      
     </div>
     <div class="actions">
       <a class="btn secondary" href="/3zbawyh/public/dashboard.php" title="رجوع للوحة التحكم">← رجوع</a>
@@ -215,17 +237,14 @@ body{margin:0;background:var(--bg);font-family:system-ui}
   <?php if($hasCategories): ?>
   <div class="layout">
 
-    <!-- العمود الأيسر: خطوات واضحة -->
-    <div class="stack" aria-label="خطوات إدارة التصنيفات">
+    <!-- العمود الأيسر -->
+    <div class="stack" aria-label="خطوات إدارة التصنيفات" style="display:flex;flex-direction:column;gap:16px">
 
-      <!-- الخطوة (1): أضف/عدّل التصنيف الرئيسي -->
+      <!-- الخطوة (1) -->
       <div class="card">
         <?php $isEdit = (bool)$editing; $activeVal = $isEdit && $hasActive ? (int)($editing['is_active'] ?? 1) : 1; ?>
         <div class="section-title">
-          <div>
-            <div class="step-title">الخطوة (1): <?= $isEdit? 'تعديل تصنيف رئيسي' : 'إضافة تصنيف رئيسي' ?></div>
-
-          </div>
+          <div class="step-title">الخطوة (1): <?= $isEdit? 'تعديل تصنيف رئيسي' : 'إضافة تصنيف رئيسي' ?></div>
           <?php if($isEdit && $hasActive): ?>
             <span class="badge <?= $activeVal? 'ok':'off' ?>"><?= $activeVal? 'مفعل':'متوقف' ?></span>
           <?php endif; ?>
@@ -237,8 +256,7 @@ body{margin:0;background:var(--bg);font-family:system-ui}
 
           <label for="cat_name">اسم التصنيف</label>
           <div>
-            <input id="cat_name" class="input" name="name" required value="<?= e($editing['name'] ?? '') ?>" aria-describedby="cat_name_hint" placeholder="مثال: موبايلات">
-
+            <input id="cat_name" class="input" name="name" required value="<?= e($editing['name'] ?? '') ?>" placeholder="مثال: موبايلات">
           </div>
 
           <?php if ($hasDesc): ?>
@@ -255,7 +273,6 @@ body{margin:0;background:var(--bg);font-family:system-ui}
             <label>الحالة</label>
             <label style="display:flex; gap:8px; align-items:center">
               <input type="checkbox" name="is_active" <?= $activeVal? 'checked':''; ?>> مفعل
-
             </label>
           <?php else: ?>
             <div></div><div class="small">لا يوجد عمود حالة في الجدول الحالي.</div>
@@ -270,18 +287,15 @@ body{margin:0;background:var(--bg);font-family:system-ui}
 
         <?php if($isEdit): ?>
           <div class="divider"></div>
-          <div class="small">رقم التصنيف: <b><?= (int)$editing['id'] ?></b> • أنشئ: <?= e($editing['created_at'] ?? '-') ?> • آخر تحديث: <?= e($editing['updated_at'] ?? '-') ?></div>
+          <div class="small">رقم التصنيف: <b><?= (int)$editing['id'] ?></b> • أُنشئ: <?= e($editing['created_at'] ?? '-') ?> • آخر تحديث: <?= e($editing['updated_at'] ?? '-') ?></div>
         <?php endif; ?>
       </div>
 
-      <!-- الخطوة (2): إدارة التصنيفات الفرعية للتصنيف المحدد -->
+      <!-- الخطوة (2): الفرعيات -->
       <?php if($editing && $hasSubcats): ?>
       <div class="card">
         <div class="section-title">
-          <div>
-            <div class="step-title">الخطوة (2): التصنيفات الفرعية لـ <b><?= e($editing['name']) ?></b></div>
-
-          </div>
+          <div class="step-title">الخطوة (2): التصنيفات الفرعية لـ <b><?= e($editing['name']) ?></b></div>
           <span class="badge"><?= count($subs) ?> فرعي</span>
         </div>
 
@@ -290,19 +304,19 @@ body{margin:0;background:var(--bg);font-family:system-ui}
           <input type="hidden" name="action" value="sub_create">
           <input type="hidden" name="category_id" value="<?= (int)$editing['id'] ?>">
           <input class="input" name="name" required placeholder="اسم الفرعي — مثال: سامسونج">
-          <label class="small" style="display:flex;align-items:center;gap:6px">
+          <label class="small" style="display:flex;align-items:center;gap:6px;white-space:nowrap">
             <input type="checkbox" name="is_active" checked> مفعل
           </label>
           <button class="btn min" type="submit">إضافة فرعي</button>
         </form>
 
-
-
         <!-- جدول الفرعيات -->
         <div class="caption">قائمة الفرعيات المرتبطة بالتصنيف الحالي.</div>
         <div class="table-wrap">
           <table class="table" aria-label="جدول التصنيفات الفرعية">
-            <thead><tr><th style="width:70px">#</th><th>الاسم</th><th style="width:130px">الحالة</th><th style="width:260px">إجراءات</th></tr></thead>
+            <thead>
+              <tr><th style="width:70px">#</th><th>الاسم</th><th style="width:130px">الحالة</th><th style="width:260px">إجراءات</th></tr>
+            </thead>
             <tbody>
               <?php foreach($subs as $s): ?>
               <tr>
@@ -322,7 +336,7 @@ body{margin:0;background:var(--bg);font-family:system-ui}
                       <input type="hidden" name="action" value="sub_update">
                       <input type="hidden" name="id" value="<?= (int)$s['id'] ?>">
                       <input class="input" name="name" required value="<?= e($s['name']) ?>">
-                      <label class="small" style="display:flex;align-items:center;gap:6px">
+                      <label class="small" style="display:flex;align-items:center;gap:6px;white-space:nowrap">
                         <input type="checkbox" name="is_active" <?= ((int)$s['is_active'])?'checked':''; ?>> مفعل
                       </label>
                       <button class="btn min" type="submit">حفظ</button>
@@ -344,14 +358,13 @@ body{margin:0;background:var(--bg);font-family:system-ui}
             </tbody>
           </table>
         </div>
-        
       </div>
       <?php endif; ?>
 
     </div>
 
-    <!-- العمود الأيمن: البحث العام + القائمة -->
-    <div class="stack" aria-label="بحث وقائمة كل التصنيفات">
+    <!-- العمود الأيمن -->
+    <div class="stack" aria-label="بحث وقائمة كل التصنيفات" style="display:flex;flex-direction:column;gap:16px">
 
       <div class="card">
         <div class="section-title">
@@ -359,7 +372,7 @@ body{margin:0;background:var(--bg);font-family:system-ui}
           <span class="small">ابحث باسم التصنيف الرئيسي.</span>
         </div>
         <form method="get" class="search-row" aria-label="بحث في التصنيفات">
-          <input name="q" value="<?= e($q) ?>" placeholder="مثال: أجهزة" class="input" style="flex:1">
+          <input name="q" value="<?= e($q) ?>" placeholder="مثال: أجهزة" class="input">
           <button class="btn min">بحث</button>
           <?php if($q!==''): ?><a class="btn secondary min" href="?">مسح</a><?php endif; ?>
         </form>
@@ -370,7 +383,6 @@ body{margin:0;background:var(--bg);font-family:system-ui}
           <h3>كل التصنيفات</h3>
           <span class="badge"><?= count($list) ?> عنصر</span>
         </div>
-       
 
         <div class="table-wrap">
           <table class="table" aria-label="جدول كل التصنيفات">
@@ -378,7 +390,7 @@ body{margin:0;background:var(--bg);font-family:system-ui}
               <tr>
                 <th style="width:70px">#</th>
                 <th>الاسم</th>
-                <?php if ($hasDesc): ?><th>الوصف</th><?php endif; ?>
+                <?php if ($hasDesc): ?><th class="col-desc hide-sm">الوصف</th><?php endif; ?>
                 <?php if ($hasActive): ?><th style="width:130px">الحالة</th><?php endif; ?>
                 <th style="width:240px">إجراءات</th>
               </tr>
@@ -388,7 +400,7 @@ body{margin:0;background:var(--bg);font-family:system-ui}
               <tr>
                 <td><?= (int)$c['id'] ?></td>
                 <td><?= e($c['name']) ?></td>
-                <?php if ($hasDesc): ?><td><?= e($c['description'] ?? '') ?></td><?php endif; ?>
+                <?php if ($hasDesc): ?><td class="col-desc hide-sm"><?= e($c['description'] ?? '') ?></td><?php endif; ?>
                 <?php if ($hasActive): ?>
                   <td>
                     <?php if((int)($c['is_active'] ?? 1)): ?>
@@ -416,12 +428,13 @@ body{margin:0;background:var(--bg);font-family:system-ui}
             </tbody>
           </table>
         </div>
+      </div>
 
-        
+    </div>
   </div>
   <?php endif; ?>
 
-  <div class="small" style="margin-top:10px;color:#94a3b8">واجهة مبسّطة • مفهومة • متناسقة مع الثيم</div>
+  <div class="small" style="margin-top:10px;color:#94a3b8">واجهة مبسّطة • متجاوبة • متناسقة مع الثيم</div>
 </div>
 </body>
 </html>

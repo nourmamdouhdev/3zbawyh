@@ -61,6 +61,7 @@ $cashierId  = (int)($_GET['cashier_id']  ?? 0);
 $customerId = (int)($_GET['customer_id'] ?? 0);
 $pay        = trim($_GET['payment_method'] ?? '');
 $limit      = max(20, (int)($_GET['limit'] ?? 200)); // حماية
+$page       = max(1, (int)($_GET['page'] ?? 1));     // رقم الصفحة الحالية
 
 $where=[]; $params=[];
 if ($dateCol)            { $where[]="si.`$dateCol` BETWEEN ? AND ?"; $params[]=$fromTs; $params[]=$toTs; }
@@ -114,6 +115,18 @@ if (($_GET['export'] ?? '') === 'csv') {
   fclose($out); exit;
 }
 
+/* حساب عدد الفواتير الكلي لنفس الفلتر للـ pagination */
+$countSql = "SELECT COUNT(*) FROM sales_invoices si WHERE $whereSql";
+$stCount = $db->prepare($countSql);
+$stCount->execute($params);
+$totalRows   = (int)$stCount->fetchColumn();
+$totalPages  = max(1, (int)ceil($totalRows / $limit));
+
+if ($page > $totalPages) {
+  $page = $totalPages;
+}
+$offset = ($page - 1) * $limit;
+
 $sql = "
   SELECT si.id, si.invoice_no, ".($dateCol? "si.`$dateCol`":"NULL")." AS created_at,
          $CUST_NAME_EXPR AS customer_name,
@@ -132,7 +145,7 @@ $sql = "
   WHERE $whereSql
   GROUP BY si.id
   ORDER BY ".($dateCol? "si.`$dateCol`":"si.id")." DESC
-  LIMIT $limit";
+  LIMIT $limit OFFSET $offset";
 $st=$db->prepare($sql); $st->execute($params);
 $rows=$st->fetchAll(PDO::FETCH_ASSOC);
 
@@ -161,6 +174,9 @@ if ($hasPaymentMethod){
   .table th{font-size:13px;color:#6b7280;text-align:right}
   .table td,.table th{padding:8px 10px;background:#fff}
   .muted{color:#6b7280}
+  .pagination{margin-top:12px;display:flex;gap:6px;flex-wrap:wrap}
+  .page-link{padding:6px 10px;border-radius:8px;border:1px solid #ddd;text-decoration:none;color:#111;font-size:13px}
+  .page-link.active{background:#111;color:#fff;border-color:#111}
 </style>
 </head>
 <body>
@@ -204,8 +220,8 @@ if ($hasPaymentMethod){
       <label>طريقة الدفع:
         <select name="payment_method">
           <option value="">الكل</option>
-          <?php foreach($pays as $p): ?>
-            <option value="<?=e2($p)?>" <?=$pay===$p?'selected':''?>><?=e2($p)?></option>
+          <?php foreach($pays as $p2): ?>
+            <option value="<?=e2($p2)?>" <?=$pay===$p2?'selected':''?>><?=e2($p2)?></option>
           <?php endforeach; ?>
         </select>
       </label>
@@ -249,6 +265,22 @@ if ($hasPaymentMethod){
         <?php endforeach; ?>
         </tbody>
       </table>
+
+      <?php if($rows && $totalPages > 1): ?>
+        <div class="pagination">
+          <?php
+            for($p = 1; $p <= $totalPages; $p++):
+              $qs = $_GET;
+              $qs['page'] = $p;
+              $href = '?'.http_build_query($qs);
+          ?>
+            <a href="<?=e2($href)?>" class="page-link <?=$p == $page ? 'active' : ''?>">
+              <?=$p?>
+            </a>
+          <?php endfor; ?>
+        </div>
+      <?php endif; ?>
+
     <?php endif; ?>
   </div>
 </div>

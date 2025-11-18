@@ -7,7 +7,7 @@ $__customer_name    = $_SESSION['pos_flow']['customer_name']    ?? '';
 $__customer_phone   = $_SESSION['pos_flow']['customer_phone']   ?? '';
 $__customer_skipped = $_SESSION['pos_flow']['customer_skipped'] ?? false;
 
-require_role_in_or_redirect(['admin','cashier']);
+require_role_in_or_redirect(['admin','cashier','Manger']);
 
 if (empty($_SESSION['pos_flow']['category_id'])) {
   header('Location: /3zbawyh/public/select_category.php'); exit;

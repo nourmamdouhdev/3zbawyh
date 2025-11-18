@@ -2,12 +2,13 @@
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/helpers.php';
 require_login();
+require_role_in_or_redirect(['admin','cashier','Manger']);
 if (!isset($_SESSION['pos_flow'])) { $_SESSION['pos_flow'] = []; }
 $__customer_name    = $_SESSION['pos_flow']['customer_name']    ?? '';
 $__customer_phone   = $_SESSION['pos_flow']['customer_phone']   ?? '';
 $__customer_skipped = $_SESSION['pos_flow']['customer_skipped'] ?? false;
 
-require_role_in_or_redirect(['admin','cashier']);
+
 
 if (isset($_GET['reset'])) {
   $_SESSION['pos_flow'] = ['category_id'=>null,'subcategory_id'=>null];
