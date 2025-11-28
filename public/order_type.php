@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   if ($act === 'invoice') {
 
-    // ✅ سعر عادي (فاتورة)
+    // ✅ سعر عادي (فاتورة باسم عميل) - لازم بيانات كاملة ومفيش تخطي
     $_SESSION['pos_sale_type'] = 'normal';
 
     $_SESSION['pos_flow']['customer_skipped'] = false;
@@ -23,15 +23,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   } elseif ($act === 'retail') {
 
-    // ✅ سعر أتاعة / جملة
+    // ✅ قطاعي: يا إمّا يكتب اسم/موبايل أو يعمل تخطي
     $_SESSION['pos_sale_type'] = 'wholesale';
 
-    // قطاعي: من غير اسم ولا موبايل
-    $_SESSION['pos_flow']['customer_name']    = '';
-    $_SESSION['pos_flow']['customer_phone']   = '';
-    $_SESSION['pos_flow']['customer_skipped'] = true;
+    // هنسيب الاسم والموبايل يتحددوا في صفحة customer_name.php
+    unset($_SESSION['pos_flow']['customer_name'], $_SESSION['pos_flow']['customer_phone']);
+    $_SESSION['pos_flow']['customer_skipped'] = false;
 
-    header('Location: /3zbawyh/public/select_category.php');
+    header('Location: /3zbawyh/public/customer_name.php?mode=retail');
     exit;
   }
 }
@@ -102,15 +101,15 @@ body {
 <div class="container">
   <div class="card">
     <h2 style="margin-top:0; color:#111;">اختيار نوع المعاملة</h2>
-    <p class="help">اختار لو هتصدر فاتورة باسم عميل، أو بيع قطاعي بدون بيانات.</p>
+    <p class="help">اختار لو هتصدر فاتورة باسم عميل، أو بيع قطاعي (بيانات اختيارية).</p>
 
     <form method="post">
       <div class="choice-row">
         <button class="btn" type="submit" name="act" value="invoice">
-          فاتورة باسم عميل
+          فاتورة باسم عميل  
         </button>
         <button class="btn secondary" type="submit" name="act" value="retail">
-          قطاعي (بدون اسم)
+          قطاعي   
         </button>
       </div>
     </form>

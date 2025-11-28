@@ -209,7 +209,7 @@ body{
             <div class="card" data-id="<?= (int)$ssc['id'] ?>">
               <div style="display:flex;justify-content:space-between;align-items:center">
                 <strong><?= e($ssc['name']) ?></strong>
-                <span class="badge">#<?= (int)$ssc['id'] ?></span>
+
               </div>
             </div>
           <?php endforeach; ?>

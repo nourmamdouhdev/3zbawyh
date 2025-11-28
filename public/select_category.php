@@ -147,8 +147,7 @@ function renderCats(list){
     d.type='button';
     d.className='card';
     d.innerHTML = `
-      <strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</strong>
-      <span class="badge">#${c.id}</span>`;
+      <strong style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</strong>`;
     d.onclick = ()=>{
       document.getElementById('category_id').value = c.id;
       document.getElementById('catForm').submit();
