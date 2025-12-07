@@ -62,15 +62,16 @@ if ($invoice) {
 // ========== جلب تفاصيل الأصناف ==========
 $it = $db->prepare("
   SELECT 
-    itms.name AS name,
+    COALESCE(si.item_name, itms.name) AS name,
     si.qty    AS quantity,
     si.unit_price,
     (si.qty * si.unit_price) AS line_total
   FROM sales_items si
-  JOIN items itms ON itms.id = si.item_id
+  LEFT JOIN items itms ON itms.id = si.item_id
   WHERE si.invoice_id = ?
   ORDER BY si.id
 ");
+
 $it->execute([$invoice_id]);
 $items = $it->fetchAll(PDO::FETCH_ASSOC);
 

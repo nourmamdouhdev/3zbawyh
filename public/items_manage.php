@@ -67,7 +67,7 @@ if(!$hasItems){ die('جدول items غير موجود.'); }
 
 $hasSKU         = has_col($db,'items','sku');
 $hasPrice       = has_col($db,'items','unit_price');
-$hasWholesale   = has_col($db,'items','price_wholesale');   // ✅ سعر القطاعي/الجملة
+$hasWholesale   = has_col($db,'items','price_wholesale');   // سعر القطاعي/الجملة
 $hasReorder     = has_col($db,'items','reorder_level');
 $hasStock       = has_col($db,'items','stock');
 $hasCatId       = has_col($db,'items','category_id')        && $hasCategories;
@@ -94,7 +94,6 @@ if(($_GET['ajax'] ?? '')==='subsub' && $hasSubSubTbl){
   header('Content-Type: application/json; charset=utf-8');
   $sid = (int)($_GET['subcategory_id'] ?? 0);
   if($sid>0){
-    // لو is_active مش موجود مش مشكلة، الشرط هيعدي
     $rows = $db->prepare("SELECT id,name FROM sub_subcategories WHERE subcategory_id=? AND (is_active=1 OR is_active IS NULL) ORDER BY name");
     $rows->execute([$sid]);
     echo json_encode($rows->fetchAll(PDO::FETCH_ASSOC));
@@ -261,18 +260,24 @@ try{
     $sql="UPDATE items SET ".implode(',',$sets)." WHERE id=?";
     $db->prepare($sql)->execute($vals); $msg='تم التحديث.';
   }
-  elseif($action==='delete'){
-    // احذف الصورة الفعلية أيضاً لو موجودة
+elseif($action==='delete'){
+    $id = (int)$_POST['id'];
+
+    // احذف الصورة لو موجودة
     if ($hasImage) {
-      $st = $db->prepare("SELECT image_url FROM items WHERE id=?"); $st->execute([(int)$_POST['id']]);
-      $url = $st->fetchColumn();
+      $stImg = $db->prepare("SELECT image_url FROM items WHERE id=?");
+      $stImg->execute([$id]);
+      $url = $stImg->fetchColumn();
       if ($url && str_starts_with($url, $UPLOAD_URL)) {
         @unlink($UPLOAD_DIR . '/' . basename($url));
       }
     }
-    $db->prepare("DELETE FROM items WHERE id=?")->execute([(int)$_POST['id']]);
+
+    // حذف الصنف نفسه
+    $db->prepare("DELETE FROM items WHERE id=?")->execute([$id]);
     $msg='تم الحذف.';
-  }
+}
+
 } catch(Throwable $e){ $err=$e->getMessage(); }
 
 /** Filters */
