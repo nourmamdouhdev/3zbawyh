@@ -457,8 +457,10 @@ if(isset($_GET['edit'])){
 
 </head>
 <body>
+  
 <div class="container">
-  <h2>الأصناف</h2>
+  
+  <h2>الأصناف</h2>        <a class="btn" href="/3zbawyh/public/dashboard.php">عودة للوحة</a>
   <?php if($msg): ?><div class="card alert-ok"><?=e($msg)?></div><?php endif; ?>
   <?php if($err): ?><div class="card alert-err">خطأ: <?=e($err)?></div><?php endif; ?>
 
