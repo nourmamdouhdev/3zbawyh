@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/helpers.php';
 require_login();
-require_admin_or_redirect();
+require_role_in_or_redirect(['admin','Manger']);
 
 date_default_timezone_set('Africa/Cairo');
 $db = db();

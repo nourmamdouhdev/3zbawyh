@@ -3,15 +3,31 @@ require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/helpers.php';
 
 $error = '';
+
 if ($_SERVER['REQUEST_METHOD']==='POST') {
     $ok = login($_POST['username'] ?? '', $_POST['password'] ?? '');
+
     if ($ok) {
+
+        // نجيب بيانات اليوزر
+        $user = current_user();
+
+        // 🔹 أولاً: لو دوره fake_viewer يروح لصفحة الـ fake
+        if (($user['role'] ?? null) === 'fake_viewer') {   // لو عندك role_name بدل role غيّر السطر ده
+            header('Location: /3zbawyh/public/fake_sales_report.php');
+            exit;
+        }
+
+        // 🔹 ثانياً: لو كاشير → order_type
         if (is_cashier()) {
             header('Location: /3zbawyh/public/order_type.php');
-        } else {
-            header('Location: /3zbawyh/public/dashboard.php');
+            exit;
         }
+
+        // 🔹 باقي الناس → dashboard
+        header('Location: /3zbawyh/public/dashboard.php');
         exit;
+
     } else {
         $error = 'بيانات غير صحيحة';
     }
