@@ -39,7 +39,8 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
 <meta charset="utf-8">
 <title>تسجيل الدخول - العزباوية</title>
 <link rel="stylesheet" href="/3zbawyh/assets/style.css">
-<link rel="manifest" href="/manifest.json">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/favicon.png">
 <style>
 body {
   display: flex;
@@ -91,10 +92,11 @@ body {
       <button class="btn" type="submit">دخول</button>
     </form>
   </div>
-</body>
-<script>
+  <script>
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./service-worker.js');
+    navigator.serviceWorker.register('service-worker.js');
 }
 </script>
+</body>
+
 </html>
