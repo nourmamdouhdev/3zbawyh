@@ -57,7 +57,7 @@ $rowsLast = [
   [
     'id'            => 1001,
     'invoice_no'    => 'F-1001',
-    'customer_name' => 'عميل تجريبي 1',
+    'customer_name' => 'عميل  1',
     'cashier_name'  => 'كاشير 1',
     'payment_method'=> 'cash',
     'total_amount'  => 1500.00,
@@ -66,7 +66,7 @@ $rowsLast = [
   [
     'id'            => 1002,
     'invoice_no'    => 'F-1002',
-    'customer_name' => 'عميل تجريبي 2',
+    'customer_name' => 'عميل  2',
     'cashier_name'  => 'كاشير 2',
     'payment_method'=> 'visa',
     'total_amount'  => 2200.00,
@@ -75,7 +75,7 @@ $rowsLast = [
   [
     'id'            => 1003,
     'invoice_no'    => 'F-1003',
-    'customer_name' => 'عميل تجريبي 3',
+    'customer_name' => 'عميل  3',
     'cashier_name'  => 'كاشير 1',
     'payment_method'=> 'instapay',
     'total_amount'  => 900.50,
@@ -84,7 +84,7 @@ $rowsLast = [
   [
     'id'            => 1004,
     'invoice_no'    => 'F-1004',
-    'customer_name' => 'عميل تجريبي 4',
+    'customer_name' => 'عميل  4',
     'cashier_name'  => 'كاشير 3',
     'payment_method'=> 'vodafone_cash',
     'total_amount'  => 1750.00,
@@ -93,7 +93,7 @@ $rowsLast = [
   [
     'id'            => 1005,
     'invoice_no'    => 'F-1005',
-    'customer_name' => 'عميل تجريبي 5',
+    'customer_name' => 'عميل  5',
     'cashier_name'  => 'كاشير 2',
     'payment_method'=> 'cash',
     'total_amount'  => 3000.00,
@@ -102,7 +102,7 @@ $rowsLast = [
   [
     'id'            => 1006,
     'invoice_no'    => 'F-1006',
-    'customer_name' => 'عميل تجريبي 6',
+    'customer_name' => 'عميل  6',
     'cashier_name'  => 'كاشير 1',
     'payment_method'=> 'visa',
     'total_amount'  => 2650.00,
@@ -111,7 +111,7 @@ $rowsLast = [
   [
     'id'            => 1007,
     'invoice_no'    => 'F-1007',
-    'customer_name' => 'عميل تجريبي 7',
+    'customer_name' => 'عميل  7',
     'cashier_name'  => 'كاشير 3',
     'payment_method'=> 'agel',
     'total_amount'  => 4100.00,
@@ -120,7 +120,7 @@ $rowsLast = [
   [
     'id'            => 1008,
     'invoice_no'    => 'F-1008',
-    'customer_name' => 'عميل تجريبي 8',
+    'customer_name' => 'عميل  8',
     'cashier_name'  => 'كاشير 2',
     'payment_method'=> 'cash',
     'total_amount'  => 1800.00,
@@ -133,7 +133,7 @@ $rowsLast = [
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8">
-  <title>تقارير المبيعات (نسخة شكلية)</title>
+  <title>تقارير المبيعات</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     body{background:#f6f7fb;color:#111;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Naskh Arabic",Tahoma,Arial}
@@ -160,7 +160,7 @@ $rowsLast = [
 
   <div class="card" style="margin-bottom:12px">
     <div class="row" style="justify-content:space-between">
-      <h2 style="margin:0">تقارير المبيعات (شكلية)</h2>
+      <h2 style="margin:0">تقارير المبيعات</h2>
       <div class="row">
         <a class="btn" href="/3zbawyh/public/invoices_details.php">صفحة الفواتير التفصيلية</a>
         <a class="btn" href="/3zbawyh/public/dashboard.php">عودة للوحة</a>
