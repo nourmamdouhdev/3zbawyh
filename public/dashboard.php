@@ -213,6 +213,10 @@ $latestInvoices = safe_fetch(function() use($db,$dateCol,$LINE_TOT,$CUSTOMER_NAM
         <strong>التقارير</strong>
         <div class="muted">ملخصات يومية/شهرية</div>
       </a>
+      <a class="qcard" href="/3zbawyh/public/invoices_details.php">
+        <strong>فواتير</strong>
+        <div class="muted"> طبع الفاتورة </div>
+      </a>
       <a class="qcard" href="/3zbawyh/public/categories.php">
         <strong>التصنيفات</strong>
         <div class="muted">إضافة/تعديل/حذف</div>
