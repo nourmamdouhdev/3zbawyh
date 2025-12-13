@@ -1,56 +1,101 @@
-# 3zbawyh (POS)
+# 3zbawyh  
+### Point of Sale (POS) System — PHP
 
-PHP/MySQL Point-of-Sale (POS) web application for managing products, customers, and sales invoices with a simple admin workflow.
-
-> Repo: nourmamdouhdev/3zbawyh :contentReference[oaicite:0]{index=0}
-
----
-
-## Key Features
-- **Authentication & Users** (login/logout, session-based access).
-- **Roles & Permissions** (role-based pages and access control).
-- **Products / Items** (CRUD, pricing, basic categorization).
-- **Customers** (customer profile + linking to invoices).
-- **Sales Invoices**
-  - Create invoice, apply discount/tax, calculate totals
-  - Payment method, paid amount, change due
-  - Print-friendly invoice view
-- **Uploads** for item images/assets (stored under uploads).
-
-> Feature list is based on the repo’s structure and observed invoice/query patterns in the project. :contentReference[oaicite:1]{index=1}
+3zbawyh is a Point of Sale (POS) web application developed using **PHP** and **MySQL**.  
+This repository is published as a **portfolio and code showcase project**, focusing on backend structure, business logic, and clean project organization.
 
 ---
 
-## Tech Stack
+## 📌 Project Purpose
+
+This repository is intended for:
+- Code review
+- Learning and reference
+- Portfolio presentation
+
+It is **not** intended to be executed or deployed.
+
+---
+
+## ⚠️ Important Notice
+
+- 🚫 Database is **NOT included**
+- 🚫 The project is **NOT runnable**
+- 🚫 Database schema and credentials are intentionally excluded
+
+The source code is shared **for viewing purposes only**.
+
+---
+
+## ✨ Features (Logical Overview)
+
+- Authentication system (session-based)
+- Role-based access control
+- Product and item management logic
+- Customer management logic
+- Sales invoice workflow
+  - Subtotal, discount, tax, total calculation
+  - Payment handling and change calculation
+- Printable invoice layout
+- Modular and reusable PHP components
+
+---
+
+## 🛠️ Tech Stack
+
 - **Backend:** PHP
-- **Database:** MySQL/MariaDB
-- **Frontend:** HTML/CSS (and any lightweight JS where needed)
-
-GitHub language breakdown shows the project is primarily PHP. :contentReference[oaicite:2]{index=2}
+- **Database:** MySQL (excluded)
+- **Frontend:** HTML, CSS, minimal JavaScript
 
 ---
 
-## Project Structure
-Top-level folders in this repository: :contentReference[oaicite:3]{index=3}
+## 📁 Project Structure
 
-- `app/config/`  
-  App configuration (typically DB connection, app settings).
-- `lib/`  
-  Shared libraries (auth/helpers/utilities).
-- `models/`  
-  Data access layer / models.
-- `public/`  
-  Public entry pages (login/dashboard/modules).
-- `assets/`  
-  Static assets (CSS, images, JS).
-- `uploads/items/`  
-  Uploaded item images/files.
+3zbawyh/
+│
+├── app/
+│ └── config/ # Application configuration (DB not included)
+│
+├── lib/ # Core helpers, authentication, utilities
+│
+├── models/ # Business logic and data models
+│
+├── public/ # Public pages (login, dashboard, modules)
+│
+├── assets/ # Static assets (CSS, JS, images)
+│
+└── uploads/
+└── items/ # Sample upload directory structure
 
 ---
 
-## Getting Started (Local Setup)
+## ▶️ Running the Project
 
-### 1) Clone
-```bash
-git clone https://github.com/nourmamdouhdev/3zbawyh.git
-cd 3zbawyh
+This project is **not designed to be run**.
+
+No installation or setup steps are provided intentionally.
+
+---
+
+## 🔒 Security & Privacy
+
+- No database files are published
+- No credentials or sensitive data are included
+- Configuration details are excluded by design
+
+---
+
+## 📄 License
+
+**All Rights Reserved**
+
+This code is published strictly for **viewing and evaluation purposes**.  
+Any reuse, modification, or commercial use is prohibited without explicit permission from the author.
+
+---
+
+## 👤 Author
+
+**Nour Mamdouh**  
+PHP Backend Developer
+
