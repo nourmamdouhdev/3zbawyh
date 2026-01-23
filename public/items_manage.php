@@ -878,13 +878,15 @@ function renderBarcode(val) {
   }
   if (window.JsBarcode) {
     window.JsBarcode(barcodePreview, val, {
-      format: 'CODE128',
-      lineColor: '#111',
-      width: 2,
-      height: 60,
-      displayValue: true,
-      fontSize: 14,
-    });
+  format: 'CODE128',
+  lineColor: '#111',
+  width: 3,       // سمك الخطوط (كبر الرقم = أعرض)
+  height: 90,     // طول الباركود
+  displayValue: true,
+  fontSize: 18,   // حجم الأرقام تحت الباركود
+  margin: 10      // مسافة حوالين الباركود
+});
+
   } else {
     barcodePreview.innerHTML = '';
     if (barcodePreviewText) barcodePreviewText.textContent = val;
@@ -924,27 +926,53 @@ function printBarcodeOnly() {
 
   const svgHtml = svg.outerHTML;
 
+  // اختار العرض اللي انت عايزه: 80mm أو 58mm
+  const receiptWidth = '58mm'; // <-- غيرها لـ '80mm' لو طابعتك 80
+
   w.document.open();
   w.document.write(`
 <!doctype html>
-<html>
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <title>Print Barcode</title>
+  <title>Barcode</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    @page { margin: 0; }
-    html, body { margin: 0; padding: 0; }
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
+    :root{
+      --receipt-width: ${receiptWidth};
     }
-    svg { width: 320px; height: auto; }
+
+    *{ box-sizing:border-box; }
+    html,body{ margin:0; padding:0; background:#fff; color:#000; }
+
+    body{
+      width: var(--receipt-width);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+    }
+
+    @page{
+      size: var(--receipt-width) auto;
+      margin: 0;
+    }
+
+    .wrap{
+      padding: 6px 6px 8px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:4px;
+    }
+
+    /* خلي الباركود يملأ عرض الإيصال */
+    svg{ width: calc(var(--receipt-width) - 12mm); height:auto; }
   </style>
 </head>
 <body>
-  ${svgHtml}
+  <div class="wrap">
+    ${svgHtml}
+  </div>
+
   <script>
     window.onload = () => {
       window.focus();
