@@ -910,14 +910,58 @@ if (barcodeValue) {
   }
 }
 
-if (barcodePrintBtn && barcodeValue) {
-  barcodePrintBtn.addEventListener('click', () => {
-    const val = barcodeValue.value.trim();
-    if (!val) return;
-    renderBarcode(val);
-    window.print();
-  });
+function printBarcodeOnly() {
+  const val = (barcodeValue?.value || '').trim();
+  if (!val) return;
+
+  renderBarcode(val);
+
+  const svg = document.getElementById('barcode_preview');
+  if (!svg) return;
+
+  const w = window.open('', '_blank', 'width=480,height=320');
+  if (!w) return;
+
+  const svgHtml = svg.outerHTML;
+
+  w.document.open();
+  w.document.write(`
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Print Barcode</title>
+  <style>
+    @page { margin: 0; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    svg { width: 320px; height: auto; }
+  </style>
+</head>
+<body>
+  ${svgHtml}
+  <script>
+    window.onload = () => {
+      window.focus();
+      window.print();
+      window.onafterprint = () => window.close();
+    };
+  <\/script>
+</body>
+</html>
+  `);
+  w.document.close();
 }
+
+if (barcodePrintBtn) {
+  barcodePrintBtn.addEventListener('click', printBarcodeOnly);
+}
+
 </script>
 </body>
 </html>
