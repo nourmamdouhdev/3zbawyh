@@ -1,10 +1,16 @@
 <?php
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/helpers.php';
+
 require_login();
-require_role_in_or_redirect(['admin','Manger']);
+
+// صلاحية دخول الصفحة (غيّرها براحتك)
+require_role_in_or_redirect(['admin','Manger','owner']);
+
 $db = db();
 $currentRole = $_SESSION['user']['role'] ?? '';
+
+// admin/owner بس يقدر يولّد/يطبع/يعدل باركود
 $canManageBarcode = in_array($currentRole, ['admin', 'owner'], true);
 
 /** Helpers */
@@ -21,35 +27,34 @@ function build_item_barcode(string $type, string $number, string $jpCost): ?stri
   $number = preg_replace('/\D/', '', $number);
   $jpCost = preg_replace('/\D/', '', $jpCost);
 
-  if ($type === '' || $number === '' || $jpCost === '') {
-    return null;
-  }
+  if ($type === '' || $number === '' || $jpCost === '') return null;
 
+  // رقم المنتج: 6 خانات
   $number = str_pad(substr($number, -6), 6, '0', STR_PAD_LEFT);
-  $jpCost = str_pad(substr($jpCost, -2), 2, '0', STR_PAD_LEFT);
+
+  // سعر اليابان: أي عدد أرقام + حد أقصى 8 (عشان مايطولش قوي)
+  $jpCost = ltrim($jpCost, '0');
+  if ($jpCost === '') $jpCost = '0';
+  $jpCost = substr($jpCost, 0, 8);
 
   return $type . $number . '00' . $jpCost;
 }
 
 /** مسارات الرفع */
-$UPLOAD_DIR = realpath(__DIR__ . '/../') . '/uploads/items';   // مسار فعلي على السيرفر
-$UPLOAD_URL = '/3zbawyh/uploads/items/';                       // مسار عام للعرض
+$UPLOAD_DIR = realpath(__DIR__ . '/../') . '/uploads/items';
+$UPLOAD_URL = '/3zbawyh/uploads/items/';
 
-// تأكد من وجود مجلد الرفع
 if (!is_dir($UPLOAD_DIR)) { @mkdir($UPLOAD_DIR, 0775, true); }
 
-// دالة رفع الصورة: تعيد [ok, url|null, error|null]
+/** رفع صورة */
 function save_uploaded_image(array $file, string $uploadDir, string $uploadUrl): array {
   if (!isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
     return ['ok'=>false, 'url'=>null, 'error'=>'لم يتم اختيار ملف'];
   }
-
-  // تحقق الحجم <= 3MB
   if (($file['size'] ?? 0) > 3 * 1024 * 1024) {
     return ['ok'=>false, 'url'=>null, 'error'=>'حجم الصورة يتجاوز 3MB'];
   }
 
-  // تحقق النوع عبر MIME
   $finfo = finfo_open(FILEINFO_MIME_TYPE);
   $mime  = finfo_file($finfo, $file['tmp_name']);
   finfo_close($finfo);
@@ -64,7 +69,6 @@ function save_uploaded_image(array $file, string $uploadDir, string $uploadUrl):
     return ['ok'=>false, 'url'=>null, 'error'=>'نوع الملف غير مدعوم (يُقبل JPG/PNG/WEBP/GIF)'];
   }
 
-  // اسم آمن وفريد
   $name = bin2hex(random_bytes(8)) . $allowed[$mime];
   $dest = rtrim($uploadDir,'/\\') . DIRECTORY_SEPARATOR . $name;
 
@@ -72,7 +76,6 @@ function save_uploaded_image(array $file, string $uploadDir, string $uploadUrl):
     return ['ok'=>false, 'url'=>null, 'error'=>'تعذّر حفظ الملف'];
   }
 
-  // صلاحيات ودية
   @chmod($dest, 0644);
 
   return ['ok'=>true, 'url'=> rtrim($uploadUrl,'/').'/'.$name, 'error'=>null];
@@ -86,17 +89,22 @@ $hasSubSubTbl   = table_exists($db,'sub_subcategories');
 if(!$hasItems){ die('جدول items غير موجود.'); }
 
 $hasSKU         = has_col($db,'items','sku');
-$showSku        = $hasSKU && $canManageBarcode;
 $hasPrice       = has_col($db,'items','unit_price');
-$hasWholesale   = has_col($db,'items','price_wholesale');   // سعر القطاعي/الجملة
+$hasWholesale   = has_col($db,'items','price_wholesale');
 $hasReorder     = has_col($db,'items','reorder_level');
 $hasStock       = has_col($db,'items','stock');
 $hasCatId       = has_col($db,'items','category_id')        && $hasCategories;
 $hasSubcatId    = has_col($db,'items','subcategory_id')     && $hasSubcatsTbl;
 $hasSubSubId    = has_col($db,'items','sub_subcategory_id') && $hasSubSubTbl;
-$hasImage       = has_col($db,'items','image_url'); // عمود الصورة
+$hasImage       = has_col($db,'items','image_url');
 
-/** AJAX: جلب التصنيفات الفرعية حسب التصنيف */
+// ✅ المولد فقط admin/owner
+$showSkuGenerator = $hasSKU && $canManageBarcode;
+
+// ✅ SKU في الجدول للكل
+$showSkuTable = $hasSKU;
+
+/** AJAX: جلب التصنيفات الفرعية */
 if(($_GET['ajax'] ?? '')==='subcats' && $hasSubcatsTbl){
   header('Content-Type: application/json; charset=utf-8');
   $cid = (int)($_GET['category_id'] ?? 0);
@@ -110,7 +118,7 @@ if(($_GET['ajax'] ?? '')==='subcats' && $hasSubcatsTbl){
   exit;
 }
 
-/** AJAX: جلب sub-sub حسب الفرعي */
+/** AJAX: جلب sub-sub */
 if(($_GET['ajax'] ?? '')==='subsub' && $hasSubSubTbl){
   header('Content-Type: application/json; charset=utf-8');
   $sid = (int)($_GET['subcategory_id'] ?? 0);
@@ -124,7 +132,32 @@ if(($_GET['ajax'] ?? '')==='subsub' && $hasSubSubTbl){
   exit;
 }
 
-/** Load categories / subcats for filters & forms */
+/** AJAX: next barcode number per type (admin/owner فقط) */
+if (($_GET['ajax'] ?? '') === 'next_barcode' && $hasSKU && $canManageBarcode) {
+  header('Content-Type: application/json; charset=utf-8');
+
+  $type = strtolower(trim((string)($_GET['type'] ?? '')));
+  $type = preg_replace('/[^a-z]/', '', $type);
+  $type = $type !== '' ? $type[0] : '';
+
+  if ($type === '') { echo json_encode(['ok'=>false,'next'=>null,'error'=>'invalid type']); exit; }
+
+  $like = $type . '______00%';
+
+  $st = $db->prepare("
+    SELECT MAX(CAST(SUBSTRING(sku, 2, 6) AS UNSIGNED)) AS mx
+    FROM items
+    WHERE sku LIKE ?
+  ");
+  $st->execute([$like]);
+  $mx = (int)($st->fetchColumn() ?? 0);
+
+  $next = str_pad((string)($mx + 1), 6, '0', STR_PAD_LEFT);
+  echo json_encode(['ok'=>true,'next'=>$next,'error'=>null]);
+  exit;
+}
+
+/** Load categories */
 $cats = [];
 if($hasCatId){
   $cats = $db->query("SELECT id,name FROM categories ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
@@ -136,29 +169,30 @@ $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 try{
   if($action==='create'){
-    // رفع صورة (اختياري)
     $newImageUrl = null;
     if ($hasImage && isset($_FILES['image_file']) && ($_FILES['image_file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
       $up = save_uploaded_image($_FILES['image_file'], $UPLOAD_DIR, $UPLOAD_URL);
-      if ($up['ok']) { $newImageUrl = $up['url']; }
-      else { throw new RuntimeException($up['error']); }
+      if ($up['ok']) $newImageUrl = $up['url'];
+      else throw new RuntimeException($up['error']);
     }
 
     $fields=['name']; $vals=[trim($_POST['name'])]; $qs=['?'];
 
     $generatedSku = null;
-    if ($canManageBarcode && $hasSKU) {
+    if ($showSkuGenerator) {
       $generatedSku = build_item_barcode(
         (string)($_POST['barcode_type'] ?? ''),
         (string)($_POST['barcode_number'] ?? ''),
         (string)($_POST['barcode_jp_cost'] ?? '')
       );
     }
-    if($hasSKU && $canManageBarcode){
+
+    if($hasSKU && $showSkuGenerator){
       $fields[]='sku';
       $vals[] = $generatedSku ?? (trim($_POST['sku'] ?? '') ?: null);
       $qs[]='?';
     }
+
     if($hasPrice){
       $fields[]='unit_price';
       $vals[] = (trim($_POST['unit_price'] ?? '')!=='')? trim($_POST['unit_price']) : null; $qs[]='?';
@@ -177,7 +211,8 @@ try{
       $fields[]='image_url'; $vals[] = $newImageUrl; $qs[]='?';
     }
 
-    $catId = null; $subId = null; $subSubId = null;
+    $catId=null; $subId=null; $subSubId=null;
+
     if($hasCatId){
       $catId = ($_POST['category_id']!=='')? (int)$_POST['category_id'] : null;
       $fields[]='category_id'; $vals[]=$catId; $qs[]='?';
@@ -187,7 +222,7 @@ try{
       if($tmpSub && $catId){
         $ok=$db->prepare("SELECT 1 FROM subcategories WHERE id=? AND category_id=?");
         $ok->execute([$tmpSub,$catId]);
-        if($ok->fetchColumn()){ $subId=$tmpSub; }
+        if($ok->fetchColumn()) $subId=$tmpSub;
       }
       $fields[]='subcategory_id'; $vals[]=$subId; $qs[]='?';
     }
@@ -196,26 +231,26 @@ try{
       if($tmpSubSub && $subId){
         $ok=$db->prepare("SELECT 1 FROM sub_subcategories WHERE id=? AND subcategory_id=?");
         $ok->execute([$tmpSubSub,$subId]);
-        if($ok->fetchColumn()){ $subSubId=$tmpSubSub; }
+        if($ok->fetchColumn()) $subSubId=$tmpSubSub;
       }
       $fields[]='sub_subcategory_id'; $vals[]=$subSubId; $qs[]='?';
     }
 
     $sql="INSERT INTO items (".implode(',',$fields).") VALUES (".implode(',',$qs).")";
-    $db->prepare($sql)->execute($vals); $msg='تمت الإضافة.';
+    $db->prepare($sql)->execute($vals);
+    $msg='تمت الإضافة.';
   }
+
   elseif($action==='update'){
     $id=(int)$_POST['id'];
 
-    // ارفع صورة جديدة لو تم اختيار ملف
     $newImageUrl = null;
     if ($hasImage && isset($_FILES['image_file']) && ($_FILES['image_file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
       $up = save_uploaded_image($_FILES['image_file'], $UPLOAD_DIR, $UPLOAD_URL);
-      if ($up['ok']) { $newImageUrl = $up['url']; }
-      else { throw new RuntimeException($up['error']); }
+      if ($up['ok']) $newImageUrl = $up['url'];
+      else throw new RuntimeException($up['error']);
     }
 
-    // احضر القديمة (لو محتاج نحذف)
     $old = null;
     if($hasImage){
       $stOld = $db->prepare("SELECT image_url FROM items WHERE id=?");
@@ -226,16 +261,19 @@ try{
     $sets=['name=?']; $vals=[trim($_POST['name'])];
 
     $generatedSku = null;
-    if ($canManageBarcode && $hasSKU) {
+    if ($showSkuGenerator) {
       $generatedSku = build_item_barcode(
         (string)($_POST['barcode_type'] ?? ''),
         (string)($_POST['barcode_number'] ?? ''),
         (string)($_POST['barcode_jp_cost'] ?? '')
       );
     }
-    if($hasSKU && $canManageBarcode){
-      $sets[]='sku=?'; $vals[] = $generatedSku ?? (trim($_POST['sku'] ?? '') ?: null);
+
+    if($hasSKU && $showSkuGenerator){
+      $sets[]='sku=?';
+      $vals[] = $generatedSku ?? (trim($_POST['sku'] ?? '') ?: null);
     }
+
     if($hasPrice){
       $sets[]='unit_price=?';
       $vals[] = (trim($_POST['unit_price'] ?? '')!=='')? trim($_POST['unit_price']) : null;
@@ -251,26 +289,18 @@ try{
       $sets[]='stock=?'; $vals[] = (int)($_POST['stock'] ?? 0);
     }
 
-    // منطق الصورة
     if($hasImage){
       $remove = isset($_POST['remove_image']) && $_POST['remove_image']=='1';
       if ($remove) {
         $sets[]='image_url=?'; $vals[] = null;
-        if ($old && str_starts_with($old, $UPLOAD_URL)) {
-          $full = $UPLOAD_DIR . '/' . basename($old);
-          @unlink($full);
-        }
+        if ($old && str_starts_with($old, $UPLOAD_URL)) @unlink($UPLOAD_DIR . '/' . basename($old));
       } elseif ($newImageUrl) {
         $sets[]='image_url=?'; $vals[] = $newImageUrl;
-        if ($old && str_starts_with($old, $UPLOAD_URL)) {
-          $full = $UPLOAD_DIR . '/' . basename($old);
-          @unlink($full);
-        }
+        if ($old && str_starts_with($old, $UPLOAD_URL)) @unlink($UPLOAD_DIR . '/' . basename($old));
       }
     }
 
-    // كاتيجوري / فرعي / فرعي فرعي
-    $catId = null; $subId = null; $subSubId = null;
+    $catId=null; $subId=null; $subSubId=null;
 
     if($hasCatId){
       $catId = ($_POST['category_id']!=='')? (int)$_POST['category_id'] : null;
@@ -281,7 +311,7 @@ try{
       if($tmpSub && $catId){
         $ok=$db->prepare("SELECT 1 FROM subcategories WHERE id=? AND category_id=?");
         $ok->execute([$tmpSub,$catId]);
-        if($ok->fetchColumn()){ $subId=$tmpSub; }
+        if($ok->fetchColumn()) $subId=$tmpSub;
       }
       $sets[]='subcategory_id=?'; $vals[]=$subId;
     }
@@ -290,34 +320,34 @@ try{
       if($tmpSubSub && $subId){
         $ok=$db->prepare("SELECT 1 FROM sub_subcategories WHERE id=? AND subcategory_id=?");
         $ok->execute([$tmpSubSub,$subId]);
-        if($ok->fetchColumn()){ $subSubId=$tmpSubSub; }
+        if($ok->fetchColumn()) $subSubId=$tmpSubSub;
       }
       $sets[]='sub_subcategory_id=?'; $vals[]=$subSubId;
     }
 
     $vals[]=$id;
     $sql="UPDATE items SET ".implode(',',$sets)." WHERE id=?";
-    $db->prepare($sql)->execute($vals); $msg='تم التحديث.';
+    $db->prepare($sql)->execute($vals);
+    $msg='تم التحديث.';
   }
-elseif($action==='delete'){
+
+  elseif($action==='delete'){
     $id = (int)$_POST['id'];
 
-    // احذف الصورة لو موجودة
     if ($hasImage) {
       $stImg = $db->prepare("SELECT image_url FROM items WHERE id=?");
       $stImg->execute([$id]);
       $url = $stImg->fetchColumn();
-      if ($url && str_starts_with($url, $UPLOAD_URL)) {
-        @unlink($UPLOAD_DIR . '/' . basename($url));
-      }
+      if ($url && str_starts_with($url, $UPLOAD_URL)) @unlink($UPLOAD_DIR . '/' . basename($url));
     }
 
-    // حذف الصنف نفسه
     $db->prepare("DELETE FROM items WHERE id=?")->execute([$id]);
     $msg='تم الحذف.';
-}
+  }
 
-} catch(Throwable $e){ $err=$e->getMessage(); }
+} catch(Throwable $e){
+  $err=$e->getMessage();
+}
 
 /** Filters */
 $q       = trim($_GET['q'] ?? '');
@@ -333,10 +363,14 @@ if($hasSubcatId){ $select.=", s.name AS subcategory_name";   $join.=" LEFT JOIN 
 if($hasSubSubId){ $select.=", ss.name AS sub_subcategory_name"; $join.=" LEFT JOIN sub_subcategories ss ON ss.id=i.sub_subcategory_id "; }
 
 $where="1"; $params=[];
+
+// ✅ بحث بالاسم + SKU للكل
 if($q!==''){
-  $where.=" AND (i.name LIKE ?".($hasSKU?" OR i.sku LIKE ?":"").")";
-  $params[]="%$q%"; if($hasSKU){ $params[]="%$q%"; }
+  $where.=" AND (i.name LIKE ?".($hasSKU ? " OR i.sku LIKE ?" : "").")";
+  $params[]="%$q%";
+  if($hasSKU){ $params[]="%$q%"; }
 }
+
 if($cat!==null && $hasCatId){ $where.=" AND i.category_id=?";        $params[]=$cat; }
 if($sub!==null && $hasSubcatId){ $where.=" AND i.subcategory_id=?";  $params[]=$sub; }
 if($subsub!==null && $hasSubSubId){ $where.=" AND i.sub_subcategory_id=?"; $params[]=$subsub; }
@@ -348,7 +382,9 @@ $list=$st->fetchAll(PDO::FETCH_ASSOC);
 /** Editing item */
 $editing=null;
 if(isset($_GET['edit'])){
-  $st=$db->prepare("SELECT * FROM items WHERE id=?"); $st->execute([(int)$_GET['edit']]); $editing=$st->fetch(PDO::FETCH_ASSOC);
+  $st=$db->prepare("SELECT * FROM items WHERE id=?");
+  $st->execute([(int)$_GET['edit']]);
+  $editing=$st->fetch(PDO::FETCH_ASSOC);
 }
 ?>
 <!DOCTYPE html>
@@ -359,14 +395,7 @@ if(isset($_GET['edit'])){
 <title>الأصناف</title>
 <link rel="stylesheet" href="/3zbawyh/assets/style.css">
 <style>
-  :root{
-    --bg:#f7f8fb;
-    --card:#fff;
-    --ink:#111;
-    --muted:#667;
-    --bd:#e8e8ef;
-  }
-
+  :root{ --bg:#f7f8fb; --card:#fff; --ink:#111; --muted:#667; --bd:#e8e8ef; }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
   body{
@@ -375,7 +404,6 @@ if(isset($_GET['edit'])){
     font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Kufi Arabic", "Cairo", sans-serif;
     line-height:1.55;
   }
-
   .container{max-width:1100px;margin:18px auto;padding:0 14px}
 
   .card{
@@ -409,115 +437,96 @@ if(isset($_GET['edit'])){
     box-shadow:0 0 0 3px #cfe2ff55;
   }
 
-  /* ===== Responsive Filters ===== */
   .filters{
-    display:grid;
-    grid-template-columns: repeat(12, 1fr);
+    display:grid; grid-template-columns: repeat(12, 1fr);
     gap:8px; align-items:center;
   }
-  .filters .q        { grid-column: 1 / -1; }
-  .filters .cat      { grid-column: 1 / -1; }
-  .filters .sub      { grid-column: 1 / -1; }
-  .filters .subsub   { grid-column: 1 / -1; }
-  .filters .go       { grid-column: 1 / -1; }
-
-  @media (min-width:640px){
-    .filters .q    { grid-column: 1 / -1; }
-    .filters .cat  { grid-column: 1 / -1; }
-    .filters .sub  { grid-column: 1 / -1; }
-    .filters .subsub { grid-column: 1 / -1; }
-    .filters .go   { grid-column: 1 / -1; }
-  }
-
+  .filters .q,.filters .cat,.filters .sub,.filters .subsub,.filters .go{ grid-column:1 / -1; }
   @media (min-width:920px){
-    .filters .q      { grid-column: 1 / -1; }
-    .filters .cat    { grid-column: 1 / 5; }
-    .filters .sub    { grid-column: 5 / 9; }
-    .filters .subsub { grid-column: 9 / 12; }
-    .filters .go     { grid-column: 12 / 13; }
+    .filters .q{ grid-column: 1 / -1; }
+    .filters .cat{ grid-column: 1 / 5; }
+    .filters .sub{ grid-column: 5 / 9; }
+    .filters .subsub{ grid-column: 9 / 12; }
+    .filters .go{ grid-column: 12 / 13; }
   }
 
-  /* ===== Form Grid ===== */
-  .form-grid{
-    display:grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap:10px;
-  }
+  .form-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px; }
   .form-grid > label{ display:block; font-size:13px; color:#555; }
   .form-grid > label > .input,
   .form-grid > label > select,
   .form-grid > label > input[type="file"]{ margin-top:6px; }
+  .form-grid .form-actions{ grid-column: 1 / -1; display:flex; flex-wrap:wrap; gap:8px; }
 
-  .form-grid .form-actions{
-    grid-column: 1 / -1;
-    display:flex; flex-wrap:wrap; gap:8px;
-  }
+  .pill{ display:inline-block; padding:4px 10px; border-radius:999px; background:#f6f7fb; border:1px solid #eee; color:#333; font-weight:600; font-size:12px; }
 
-  .pill{
-    display:inline-block; padding:4px 10px; border-radius:999px;
-    background:#f6f7fb; border:1px solid #eee; color:#333; font-weight:600; font-size:12px;
-  }
-
-  /* ===== Table ===== */
   .table-wrap{ overflow-x:auto; -webkit-overflow-scrolling: touch; }
   table.table{ width:100%; border-collapse:separate; border-spacing:0 8px; min-width:720px; }
-  .table thead th{
-    text-align:start; font-size:12px; color:#667; font-weight:700;
-    padding:0 10px 6px; white-space:nowrap;
-  }
-  .table tbody tr{
-    background:#fff; border:1px solid var(--bd); border-radius:12px;
-  }
-  .table tbody tr > td{
-    padding:10px; border-top:1px solid var(--bd); white-space:nowrap;
-  }
-  .table tbody tr > td:first-child{
-    border-start-start-radius:12px; border-end-start-radius:12px; border-right:0;
-    position: sticky; inset-inline-start: 0; background: #fff; z-index: 1;
-  }
-  .table tbody tr > td:last-child{
-    border-start-end-radius:12px; border-end-end-radius:12px; border-left:0;
-  }
+  .table thead th{ text-align:start; font-size:12px; color:#667; font-weight:700; padding:0 10px 6px; white-space:nowrap; }
+  .table tbody tr{ background:#fff; border:1px solid var(--bd); border-radius:12px; }
+  .table tbody tr > td{ padding:10px; border-top:1px solid var(--bd); white-space:nowrap; }
+  .table tbody tr > td:first-child{ border-start-start-radius:12px; border-end-start-radius:12px; border-right:0; position: sticky; inset-inline-start: 0; background: #fff; z-index: 1; }
+  .table tbody tr > td:last-child{ border-start-end-radius:12px; border-end-end-radius:12px; border-left:0; }
 
   .img-thumb{width:44px;height:44px;object-fit:cover;border-radius:10px;border:1px solid var(--bd)}
 
-  /* رسائل */
   .alert-ok{ background:#ecfdf5; border:1px solid #c7f3e3; }
   .alert-err{ background:#fef2f2; border:1px solid #f9cccc; }
 
   .row-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 
+  /* ✅ ما نخفيش SKU على الموبايل */
   @media (max-width:640px){
-    .col-image, .col-sku, .col-reorder, .col-sub, .col-subsub { display:none; }
+    .col-image, .col-reorder, .col-sub, .col-subsub { display:none; }
     .btn{ padding:8px 12px; border-radius:10px; }
     .img-thumb{ width:40px; height:40px; }
   }
 
+  /* ===== Barcode Standalone Card ===== */
+  .barcode-box-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:10px;
+  }
+  .barcode-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .barcode-options{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap:10px;
+  }
+  .barcode-options label{ font-size:13px; color:#555; }
+  .barcode-preview{
+    margin-top:12px;
+    border:1px dashed #d7dbe8;
+    background:#fff;
+    border-radius:12px;
+    padding:10px;
+    text-align:center;
+  }
+  .barcode-preview svg{ max-width:100%; height:auto; }
+  .barcode-hint{ margin-top:8px; font-size:12px; color:var(--muted); }
+
   @media print{
     body{ background:#fff; }
-    .container > *:not(.barcode-card){ display:none !important; }
-    .barcode-card{ box-shadow:none; border:0; }
-    .barcode-card input,
-    .barcode-card select,
-    .barcode-card button,
-    .barcode-card .form-actions,
-    .barcode-card h3 { display:none !important; }
-    #barcode_preview_wrap{ border:0; }
+    .container > *:not(.barcode-print-area){ display:none !important; }
+    .barcode-print-area{ box-shadow:none; border:0; }
   }
 </style>
-
 </head>
 <body>
-  
+
 <div class="container">
-  
-  <h2>الأصناف</h2>        <a class="btn" href="/3zbawyh/public/dashboard.php">عودة للوحة</a>
+
+  <h2>الأصناف</h2>
+  <a class="btn" href="/3zbawyh/public/dashboard.php">عودة للوحة</a>
+
   <?php if($msg): ?><div class="card alert-ok"><?=e($msg)?></div><?php endif; ?>
   <?php if($err): ?><div class="card alert-err">خطأ: <?=e($err)?></div><?php endif; ?>
 
   <!-- Filters -->
   <form method="get" class="card filters">
-    <input class="input q" name="q" value="<?=e($q)?>" placeholder="بحث بالاسم<?= $showSku? '/الكود':'' ?>">
+    <input class="input q" name="q" value="<?=e($q)?>" placeholder="بحث بالاسم<?= $hasSKU ? '/الكود':'' ?>">
     <select class="input cat" id="f_category" name="category_id" <?= $hasCatId? '':'disabled' ?>>
       <option value=""><?= $hasCatId? 'كل التصنيفات':'التصنيفات غير مفعّلة' ?></option>
       <?php foreach($cats as $c): ?>
@@ -536,6 +545,7 @@ if(isset($_GET['edit'])){
   <!-- Form -->
   <div class="card barcode-card">
     <h3><?= $editing? 'تعديل صنف':'إضافة صنف' ?></h3>
+
     <form method="post" class="form-grid" enctype="multipart/form-data">
       <input type="hidden" name="action" value="<?= $editing? 'update':'create' ?>">
       <?php if($editing): ?><input type="hidden" name="id" value="<?=$editing['id']?>"><?php endif; ?>
@@ -555,39 +565,6 @@ if(isset($_GET['edit'])){
             </label>
           </div>
         <?php endif; ?>
-      </label>
-      <?php endif; ?>
-
-      <?php if($showSku): ?>
-      <label>مولّد الباركود (للأدمن/المالك فقط)
-        <div class="form-grid" style="margin-top:6px">
-          <label>نوع المنتج
-            <select class="input" id="barcode_type" name="barcode_type">
-              <option value="">— اختر —</option>
-              <option value="n">n - neckles</option>
-              <option value="a">a - ansyal</option>
-              <option value="r">r - ring</option>
-            </select>
-          </label>
-          <label>رقم المنتج (6 أرقام)
-            <input class="input" id="barcode_number" name="barcode_number" inputmode="numeric" placeholder="000001">
-          </label>
-          <label>سعر اليابان (رقمين)
-            <input class="input" id="barcode_jp_cost" name="barcode_jp_cost" inputmode="numeric" placeholder="15">
-          </label>
-          <div style="display:flex;align-items:end;gap:8px">
-            <button class="btn secondary" type="button" id="barcode_generate">توليد الباركود</button>
-            <button class="btn secondary" type="button" id="barcode_print">طباعة الباركود</button>
-          </div>
-        </div>
-        <div style="margin-top:8px;font-size:12px;color:#667">
-          التنسيق: حرف النوع + رقم المنتج 6 خانات + 00 + سعر اليابان (مثال: n0000010015).
-        </div>
-        <input class="input" id="barcode_value" name="sku" style="margin-top:8px" placeholder="سيظهر الباركود هنا" value="<?=e($editing['sku'] ?? '')?>">
-        <div id="barcode_preview_wrap" style="margin-top:10px;padding:10px;border:1px dashed #d7dbe8;border-radius:10px;text-align:center">
-          <svg id="barcode_preview"></svg>
-          <div id="barcode_preview_text" style="margin-top:6px;font-size:12px;color:#667"></div>
-        </div>
       </label>
       <?php endif; ?>
 
@@ -649,16 +626,61 @@ if(isset($_GET['edit'])){
     </form>
   </div>
 
+  <!-- ✅ Barcode Standalone Card (admin/owner فقط) -->
+  <?php if($showSkuGenerator): ?>
+    <div class="card barcode-standalone barcode-print-area">
+      <div class="barcode-box-head">
+        <h3 style="margin:0">الباركود</h3>
+        <div class="barcode-actions">
+          <button class="btn secondary" type="button" id="barcode_generate">توليد</button>
+          <button class="btn secondary" type="button" id="barcode_print">طباعة</button>
+        </div>
+      </div>
+
+      <div class="barcode-options">
+        <label>نوع المنتج
+          <select class="input" id="barcode_type" name="barcode_type">
+            <option value="">— اختر —</option>
+            <option value="n">n - neckles</option>
+            <option value="a">a - ansyal</option>
+            <option value="r">r - ring</option>
+          </select>
+        </label>
+
+        <label>رقم المنتج (6 أرقام) — Auto لو فاضي
+          <input class="input" id="barcode_number" name="barcode_number" inputmode="numeric" placeholder="000001">
+        </label>
+
+        <label>سعر الصين   
+          <input class="input" id="barcode_jp_cost" name="barcode_jp_cost" inputmode="numeric" placeholder="15 أو 150 أو 1200">
+        </label>
+
+        <label>قيمة الباركود (SKU)
+          <input class="input" id="barcode_value" name="sku" placeholder="سيظهر الباركود هنا" value="<?=e($editing['sku'] ?? '')?>">
+        </label>
+      </div>
+
+      <div class="barcode-preview">
+        <svg id="barcode_preview"></svg>
+      </div>
+
+      <div class="barcode-hint">
+        التنسيق: حرف النوع + رقم 6 خانات + 00 + سعر اليابان — مثال: n00000100150
+      </div>
+    </div>
+  <?php endif; ?>
+
   <!-- List -->
   <div class="card">
     <h3>قائمة الأصناف (<?=count($list)?>)</h3>
+
     <div class="table-wrap">
       <table class="table">
         <thead>
           <tr>
             <th>#</th><th>الاسم</th>
             <?php if($hasImage): ?><th class="col-image">صورة</th><?php endif; ?>
-            <?php if($showSku): ?><th class="col-sku">SKU</th><?php endif; ?>
+            <?php if($showSkuTable): ?><th class="col-sku">الباركود</th><?php endif; ?>
             <?php if($hasPrice): ?><th class="col-price">السعر (فاتورة)</th><?php endif; ?>
             <?php if($hasWholesale): ?><th class="col-wholesale">سعر قطاعي</th><?php endif; ?>
             <?php if($hasStock): ?><th class="col-stock">المخزون</th><?php endif; ?>
@@ -669,6 +691,7 @@ if(isset($_GET['edit'])){
             <th>إجراءات</th>
           </tr>
         </thead>
+
         <tbody>
           <?php foreach($list as $it): ?>
             <tr>
@@ -685,7 +708,7 @@ if(isset($_GET['edit'])){
                 </td>
               <?php endif; ?>
 
-              <?php if($showSku): ?>
+              <?php if($showSkuTable): ?>
                 <td class="col-sku"><?=e($it['sku'])?></td>
               <?php endif; ?>
 
@@ -742,21 +765,23 @@ if(isset($_GET['edit'])){
             </tr>
           <?php endforeach; ?>
         </tbody>
+
       </table>
     </div>
   </div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script>
-/** تعبئة قائمة الفرعيات */
+/** تعبئة الفرعيات */
 async function fillSubcats(selectCat, selectSub, selectedId){
   const cid = selectCat.value || '';
   selectSub.innerHTML = '';
   const opt0 = document.createElement('option');
   opt0.value = ''; opt0.textContent = cid ? '— اختر الفرعي —' : '— بدون —';
   selectSub.appendChild(opt0);
-  if(!cid){ return; }
+  if(!cid) return;
 
   try{
     const res = await fetch(`?ajax=subcats&category_id=${encodeURIComponent(cid)}`);
@@ -777,7 +802,7 @@ async function fillSubSubcats(selectSub, selectSubSub, selectedId){
   const opt0 = document.createElement('option');
   opt0.value = ''; opt0.textContent = sid ? '— اختر الفرعي الفرعي —' : '— بدون —';
   selectSubSub.appendChild(opt0);
-  if(!sid){ return; }
+  if(!sid) return;
 
   try{
     const res = await fetch(`?ajax=subsub&subcategory_id=${encodeURIComponent(sid)}`);
@@ -791,16 +816,14 @@ async function fillSubSubcats(selectSub, selectSubSub, selectedId){
   }catch(e){}
 }
 
-/** فلاتر أعلى القائمة */
+/** فلاتر أعلى */
 const fCat    = document.getElementById('f_category');
 const fSub    = document.getElementById('f_subcategory');
 const fSubSub = document.getElementById('f_sub_subcategory');
 if(fCat && fSub){
   fCat.addEventListener('change', ()=>{
     fillSubcats(fCat, fSub, '').then(()=>{
-      if(fSubSub){
-        fSubSub.innerHTML = '<option value="">— بدون —</option>';
-      }
+      if(fSubSub) fSubSub.innerHTML = '<option value="">— بدون —</option>';
     });
   });
   if(fSubSub){
@@ -808,14 +831,11 @@ if(fCat && fSub){
   }
 
   <?php if($cat): ?>
-    // تهيئة الفلاتر مع القيم المختارة
-    fillSubcats(fCat, fSub, <?=json_encode($sub)?>).then(()=>{
-      <?php if($subsub): ?>
-        if(fSubSub){
-          fillSubSubcats(fSub, fSubSub, <?=json_encode($subsub)?>);
-        }
-      <?php endif; ?>
-    });
+  fillSubcats(fCat, fSub, <?=json_encode($sub)?>).then(()=>{
+    <?php if($subsub): ?>
+    if(fSubSub) fillSubSubcats(fSub, fSubSub, <?=json_encode($subsub)?>);
+    <?php endif; ?>
+  });
   <?php endif; ?>
 }
 
@@ -827,9 +847,7 @@ const iSubSub = document.getElementById('i_sub_subcategory');
 if(iCat && iSub){
   iCat.addEventListener('change', ()=>{
     fillSubcats(iCat, iSub, '').then(()=>{
-      if(iSubSub){
-        iSubSub.innerHTML = '<option value="">— بدون —</option>';
-      }
+      if(iSubSub) iSubSub.innerHTML = '<option value="">— بدون —</option>';
     });
   });
 
@@ -838,19 +856,15 @@ if(iCat && iSub){
   }
 
   <?php if($editing && !empty($editing['category_id'])): ?>
-    fillSubcats(iCat, iSub, <?=json_encode((int)($editing['subcategory_id'] ?? 0))?>).then(()=>{
-      <?php if($hasSubSubId): ?>
-        fillSubSubcats(
-          iSub,
-          iSubSub,
-          <?=json_encode((int)($editing['sub_subcategory_id'] ?? 0))?>
-        );
-      <?php endif; ?>
-    });
+  fillSubcats(iCat, iSub, <?=json_encode((int)($editing['subcategory_id'] ?? 0))?>).then(()=>{
+    <?php if($hasSubSubId): ?>
+    fillSubSubcats(iSub, iSubSub, <?=json_encode((int)($editing['sub_subcategory_id'] ?? 0))?>);
+    <?php endif; ?>
+  });
   <?php endif; ?>
 }
 
-/** مولّد الباركود */
+/** Barcode generator */
 const barcodeType = document.getElementById('barcode_type');
 const barcodeNumber = document.getElementById('barcode_number');
 const barcodeCost = document.getElementById('barcode_jp_cost');
@@ -858,58 +872,69 @@ const barcodeValue = document.getElementById('barcode_value');
 const barcodeBtn = document.getElementById('barcode_generate');
 const barcodePrintBtn = document.getElementById('barcode_print');
 const barcodePreview = document.getElementById('barcode_preview');
-const barcodePreviewText = document.getElementById('barcode_preview_text');
 
 function buildBarcodeValue() {
   if (!barcodeType || !barcodeNumber || !barcodeCost) return '';
   const type = (barcodeType.value || '').trim().toLowerCase().replace(/[^a-z]/g, '').slice(0, 1);
-  const number = (barcodeNumber.value || '').replace(/\D/g, '').slice(-6).padStart(6, '0');
-  const cost = (barcodeCost.value || '').replace(/\D/g, '').slice(-2).padStart(2, '0');
-  if (!type || !barcodeNumber.value || !barcodeCost.value) return '';
+
+  const numberRaw = (barcodeNumber.value || '').replace(/\D/g, '');
+  const costRaw   = (barcodeCost.value || '').replace(/\D/g, '');
+
+  if (!type || !numberRaw || !costRaw) return '';
+
+  const number = numberRaw.slice(-6).padStart(6, '0');
+
+  let cost = costRaw.replace(/^0+/, '');
+  if (!cost) cost = '0';
+  cost = cost.slice(0, 8);
+
   return `${type}${number}00${cost}`;
+}
+
+async function fetchNextNumberForType(typeChar){
+  try{
+    const res = await fetch(`?ajax=next_barcode&type=${encodeURIComponent(typeChar)}`);
+    const data = await res.json();
+    if (data && data.ok && data.next) return data.next;
+  }catch(e){}
+  return null;
 }
 
 function renderBarcode(val) {
   if (!barcodePreview) return;
-  if (!val) {
-    barcodePreview.innerHTML = '';
-    if (barcodePreviewText) barcodePreviewText.textContent = '';
-    return;
-  }
+  if (!val) { barcodePreview.innerHTML = ''; return; }
   if (window.JsBarcode) {
     window.JsBarcode(barcodePreview, val, {
-  format: 'CODE128',
-  lineColor: '#111',
-  width: 3,       // سمك الخطوط (كبر الرقم = أعرض)
-  height: 90,     // طول الباركود
-  displayValue: true,
-  fontSize: 18,   // حجم الأرقام تحت الباركود
-  margin: 10      // مسافة حوالين الباركود
-});
-
-  } else {
-    barcodePreview.innerHTML = '';
-    if (barcodePreviewText) barcodePreviewText.textContent = val;
+      format: 'CODE128',
+      lineColor: '#111',
+      width: 3,
+      height: 90,
+      displayValue: true,
+      fontSize: 18,
+      margin: 10
+    });
   }
 }
 
+if (barcodeValue && barcodeValue.value.trim()) renderBarcode(barcodeValue.value.trim());
+if (barcodeValue) barcodeValue.addEventListener('input', ()=> renderBarcode(barcodeValue.value.trim()));
+
 if (barcodeBtn && barcodeValue) {
-  barcodeBtn.addEventListener('click', () => {
+  barcodeBtn.addEventListener('click', async () => {
+    const type = (barcodeType.value || '').trim().toLowerCase().replace(/[^a-z]/g, '').slice(0, 1);
+    if (!type) return;
+
+    if (!barcodeNumber.value.trim()) {
+      const next = await fetchNextNumberForType(type);
+      if (next) barcodeNumber.value = next;
+    }
+
     const val = buildBarcodeValue();
     if (val) {
       barcodeValue.value = val;
       renderBarcode(val);
     }
   });
-}
-
-if (barcodeValue) {
-  barcodeValue.addEventListener('input', () => {
-    renderBarcode(barcodeValue.value.trim());
-  });
-  if (barcodeValue.value.trim()) {
-    renderBarcode(barcodeValue.value.trim());
-  }
 }
 
 function printBarcodeOnly() {
@@ -925,9 +950,7 @@ function printBarcodeOnly() {
   if (!w) return;
 
   const svgHtml = svg.outerHTML;
-
-  // اختار العرض اللي انت عايزه: 80mm أو 58mm
-  const receiptWidth = '58mm'; // <-- غيرها لـ '80mm' لو طابعتك 80
+  const receiptWidth = '58mm'; // غيّرها 80mm لو طابعتك 80
 
   w.document.open();
   w.document.write(`
@@ -938,47 +961,19 @@ function printBarcodeOnly() {
   <title>Barcode</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root{
-      --receipt-width: ${receiptWidth};
-    }
-
+    :root{ --receipt-width: ${receiptWidth}; }
     *{ box-sizing:border-box; }
     html,body{ margin:0; padding:0; background:#fff; color:#000; }
-
-    body{
-      width: var(--receipt-width);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
-    }
-
-    @page{
-      size: var(--receipt-width) auto;
-      margin: 0;
-    }
-
-    .wrap{
-      padding: 6px 6px 8px;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      gap:4px;
-    }
-
-    /* خلي الباركود يملأ عرض الإيصال */
+    body{ width: var(--receipt-width); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace; }
+    @page{ size: var(--receipt-width) auto; margin: 0; }
+    .wrap{ padding: 6px 6px 8px; display:flex; align-items:center; justify-content:center; }
     svg{ width: calc(var(--receipt-width) - 12mm); height:auto; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    ${svgHtml}
-  </div>
-
+  <div class="wrap">${svgHtml}</div>
   <script>
-    window.onload = () => {
-      window.focus();
-      window.print();
-      window.onafterprint = () => window.close();
-    };
+    window.onload = () => { window.focus(); window.print(); window.onafterprint = () => window.close(); };
   <\/script>
 </body>
 </html>
@@ -986,10 +981,7 @@ function printBarcodeOnly() {
   w.document.close();
 }
 
-if (barcodePrintBtn) {
-  barcodePrintBtn.addEventListener('click', printBarcodeOnly);
-}
-
+if (barcodePrintBtn) barcodePrintBtn.addEventListener('click', printBarcodeOnly);
 </script>
 </body>
 </html>
