@@ -492,6 +492,18 @@ if(isset($_GET['edit'])){
     .btn{ padding:8px 12px; border-radius:10px; }
     .img-thumb{ width:40px; height:40px; }
   }
+
+  @media print{
+    body{ background:#fff; }
+    .container > *:not(.barcode-card){ display:none !important; }
+    .barcode-card{ box-shadow:none; border:0; }
+    .barcode-card input,
+    .barcode-card select,
+    .barcode-card button,
+    .barcode-card .form-actions,
+    .barcode-card h3 { display:none !important; }
+    #barcode_preview_wrap{ border:0; }
+  }
 </style>
 
 </head>
@@ -522,7 +534,7 @@ if(isset($_GET['edit'])){
   </form>
 
   <!-- Form -->
-  <div class="card">
+  <div class="card barcode-card">
     <h3><?= $editing? 'تعديل صنف':'إضافة صنف' ?></h3>
     <form method="post" class="form-grid" enctype="multipart/form-data">
       <input type="hidden" name="action" value="<?= $editing? 'update':'create' ?>">
@@ -565,12 +577,17 @@ if(isset($_GET['edit'])){
           </label>
           <div style="display:flex;align-items:end;gap:8px">
             <button class="btn secondary" type="button" id="barcode_generate">توليد الباركود</button>
+            <button class="btn secondary" type="button" id="barcode_print">طباعة الباركود</button>
           </div>
         </div>
         <div style="margin-top:8px;font-size:12px;color:#667">
           التنسيق: حرف النوع + رقم المنتج 6 خانات + 00 + سعر اليابان (مثال: n0000010015).
         </div>
         <input class="input" id="barcode_value" name="sku" style="margin-top:8px" placeholder="سيظهر الباركود هنا" value="<?=e($editing['sku'] ?? '')?>">
+        <div id="barcode_preview_wrap" style="margin-top:10px;padding:10px;border:1px dashed #d7dbe8;border-radius:10px;text-align:center">
+          <svg id="barcode_preview"></svg>
+          <div id="barcode_preview_text" style="margin-top:6px;font-size:12px;color:#667"></div>
+        </div>
       </label>
       <?php endif; ?>
 
@@ -730,6 +747,7 @@ if(isset($_GET['edit'])){
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script>
 /** تعبئة قائمة الفرعيات */
 async function fillSubcats(selectCat, selectSub, selectedId){
@@ -838,6 +856,9 @@ const barcodeNumber = document.getElementById('barcode_number');
 const barcodeCost = document.getElementById('barcode_jp_cost');
 const barcodeValue = document.getElementById('barcode_value');
 const barcodeBtn = document.getElementById('barcode_generate');
+const barcodePrintBtn = document.getElementById('barcode_print');
+const barcodePreview = document.getElementById('barcode_preview');
+const barcodePreviewText = document.getElementById('barcode_preview_text');
 
 function buildBarcodeValue() {
   if (!barcodeType || !barcodeNumber || !barcodeCost) return '';
@@ -848,12 +869,53 @@ function buildBarcodeValue() {
   return `${type}${number}00${cost}`;
 }
 
+function renderBarcode(val) {
+  if (!barcodePreview) return;
+  if (!val) {
+    barcodePreview.innerHTML = '';
+    if (barcodePreviewText) barcodePreviewText.textContent = '';
+    return;
+  }
+  if (window.JsBarcode) {
+    window.JsBarcode(barcodePreview, val, {
+      format: 'CODE128',
+      lineColor: '#111',
+      width: 2,
+      height: 60,
+      displayValue: true,
+      fontSize: 14,
+    });
+  } else {
+    barcodePreview.innerHTML = '';
+    if (barcodePreviewText) barcodePreviewText.textContent = val;
+  }
+}
+
 if (barcodeBtn && barcodeValue) {
   barcodeBtn.addEventListener('click', () => {
     const val = buildBarcodeValue();
     if (val) {
       barcodeValue.value = val;
+      renderBarcode(val);
     }
+  });
+}
+
+if (barcodeValue) {
+  barcodeValue.addEventListener('input', () => {
+    renderBarcode(barcodeValue.value.trim());
+  });
+  if (barcodeValue.value.trim()) {
+    renderBarcode(barcodeValue.value.trim());
+  }
+}
+
+if (barcodePrintBtn && barcodeValue) {
+  barcodePrintBtn.addEventListener('click', () => {
+    const val = barcodeValue.value.trim();
+    if (!val) return;
+    renderBarcode(val);
+    window.print();
   });
 }
 </script>
