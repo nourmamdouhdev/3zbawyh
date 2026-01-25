@@ -38,6 +38,18 @@ $u = current_user();
 <title>POS — الأصناف</title>
 <link rel="stylesheet" href="/3zbawyh/assets/style.css">
 <style>
+  .code-badge{
+  font-size:12px;
+  padding:4px 10px;
+  border-radius:999px;
+  background:#f7f7ff;
+  border:1px solid #e3e6ff;
+  color:#2b2f77;
+  font-weight:700;
+  display:inline-block;
+}
+.code-row{ margin-top:6px; }
+
 :root{
   --bg1:#f6f7fb; --bg2:#eef3ff; --card:#fff; --ink:#111; --muted:#667;
   --pri:#2261ee; --pri-ink:#fff; --bd:#e8e8ef; --badge:#eef2f8; --accent:#0b4ea9;
@@ -108,6 +120,26 @@ a{color:var(--pri)}
   font-weight:900; transition:transform .15s
 }
 .add-btn:active .plus{transform:scale(0.92)}
+.sku-line{
+  margin-top:6px;
+  font-size:12px;
+  color:var(--muted);
+  display:flex;
+  gap:6px;
+  align-items:center;
+}
+.sku-line .k{
+  opacity:.9;
+}
+.sku-line .v{
+  font-weight:800;
+  letter-spacing:.6px;
+  color:#111;
+  background:#f6f7fb;
+  border:1px solid var(--bd);
+  padding:2px 8px;
+  border-radius:999px;
+}
 
 .qty{
   width:84px; display:flex; align-items:center; gap:6px;
@@ -326,7 +358,7 @@ function renderItems(items){
     const stock = (it.stock==null || it.stock==='') ? '-' : it.stock;
     const low = (stock!== '-' && parseFloat(stock)<=0);
     const img = getItemImage(it);
-
+    const sku = (it.sku || '').toString().trim();
     const displayPrice = getDisplayPrice(it);
     const hasWholesale = it.price_wholesale !== undefined && it.price_wholesale !== null && parseFloat(it.price_wholesale) > 0;
 
@@ -339,11 +371,16 @@ function renderItems(items){
       <div class="name" title="${it.name||''}">${it.name||''}</div>
       <div class="meta" style="flex-direction:column;align-items:flex-start">
         <div>
-          <span class="price-badge">
-            السعر الحالي: ${fmt(displayPrice)} ج.م
-            ${SALE_TYPE === 'wholesale' ? ' (قطاعي)' : ' (فاتورة)'}
-          </span>
-          <span class="stock-badge ${low?'stock-low':''}">المخزون: ${stock}</span>
+        <span class="price-badge">
+          السعر الحالي: ${fmt(displayPrice)} ج.م
+          ${SALE_TYPE === 'wholesale' ? ' (قطاعي)' : ' (فاتورة)'}
+        </span>
+
+       ${sku ? `<div class="sku-line"><span class="k">كود:</span><span class="v">${sku}</span></div>` : ''}
+
+
+        <span class="stock-badge ${low?'stock-low':''}">المخزون: ${stock}</span>
+
         </div>
         ${hasWholesale ? `
           <div class="price-note">
@@ -402,6 +439,10 @@ function addToCart(id, qty, btnEl){
     if(!res.ok){ alert(res.error||'خطأ'); return; }
     refreshCartCount();
     toast({ok:true, title:'تمت الإضافة', msg:`أُضيف (${qty}) × صنف #${id} إلى العربة.`});
+    const qInput = document.getElementById('q');
+qInput.value = '';
+qInput.focus();
+
     if (btnEl){
       btnEl.style.transform='scale(0.96)';
       setTimeout(()=>{ btnEl.style.transform=''; },120);
@@ -437,12 +478,30 @@ function refreshCartCount(){
 /* Init */
 searchItems();
 refreshCartCount();
+window.addEventListener('load', () => {
+  document.getElementById('q').focus();
+});
 
 /* بحث بالزر و Enter */
 document.getElementById('btnSearch').addEventListener('click', searchItems);
-document.getElementById('q').addEventListener('keydown', e=>{
-  if(e.key === 'Enter'){ e.preventDefault(); searchItems(); }
+const qInput = document.getElementById('q');
+
+qInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+
+    const v = qInput.value.trim();
+    if (!v) return;
+
+    searchItems();
+
+    // اختياري: فضي الخانة بعد البحث
+    setTimeout(() => {
+      qInput.select();
+    }, 50);
+  }
 });
+
 </script>
 </body>
 </html>

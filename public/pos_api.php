@@ -201,27 +201,36 @@ try {
       $sid  = (int)($_GET['subcategory_id'] ?? 0);
       $ssid = (int)($_GET['sub_subcategory_id'] ?? 0);   // ✅ فلتر الفرعي الفرعي
 
-      $sql = "SELECT 
-                i.id, 
-                i.name, 
-                i.unit_price, 
-                i.price_wholesale, 
-                i.stock, 
-                i.image_url
-              FROM items i
-              WHERE 1=1";
+$sql = "SELECT 
+          i.id, 
+          i.name,
+          i.sku,              -- ✅ هنا
+          i.unit_price, 
+          i.price_wholesale, 
+          i.stock, 
+          i.image_url
+        FROM items i
+        WHERE 1=1";
+
       $p = [];
 
       if ($cid > 0)  { $sql .= " AND i.category_id = ?";       $p[] = $cid; }
       if ($sid > 0)  { $sql .= " AND i.subcategory_id = ?";    $p[] = $sid; }
       if ($ssid > 0) { $sql .= " AND i.sub_subcategory_id = ?";$p[] = $ssid; }
 
-      if ($q !== '') {
-        // لو sku مش موجودة، الكويري دي هتشتغل بس لو عندك العمود
-        $sql .= " AND (i.name LIKE ? OR i.sku LIKE ?)";
-        $p[] = "%$q%"; 
-        $p[] = "%$q%";
-      }
+if ($q !== '') {
+  if (ctype_digit($q)) {
+    // لو رقم بس → ركّز على الكود
+    $sql .= " AND i.sku LIKE ?";
+    $p[] = "%$q%";
+  } else {
+    // اسم أو كود
+    $sql .= " AND (i.name LIKE ? OR i.sku LIKE ?)";
+    $p[] = "%$q%";
+    $p[] = "%$q%";
+  }
+}
+
 
       $sql .= " ORDER BY i.name ASC LIMIT 200";
       $st = db()->prepare($sql);
@@ -235,6 +244,7 @@ try {
         $items[] = [
           'id'              => (int)$r['id'],
           'name'            => $r['name'],
+            'sku'             => $r['sku'] ?? '',   // ✅ هنا
           'unit_price'      => $unit,   // السعر العادي
           'price_wholesale' => $whole,  // سعر الأتاعة
           'stock'           => isset($r['stock']) ? (float)$r['stock'] : null,
