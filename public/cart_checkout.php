@@ -16,13 +16,16 @@ $u = current_user();
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"> <!-- مهم للموبايل -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>نقاط البيع - دفع عربة التسوق</title>
 <link rel="stylesheet" href="/3zbawyh/assets/style.css">
 <style>
 :root{
   --bg:#f6f7fb;--card:#fff;--bd:#e8e8ef;--ink:#111;
-  --pri:#2261ee;--pri-ink:#fff;--ok:#137333;--danger:#b3261e
+  --muted:#6b7280;
+  --pri:#2261ee;--pri-ink:#fff;--ok:#137333;--danger:#b3261e;
+  --shadow:0 12px 30px rgba(0,0,0,.06);
+  --r:16px;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -32,137 +35,223 @@ body{
   font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--ink)
 }
 
-/* ===== Nav ===== */
-.nav{
-  display:flex;justify-content:space-between;align-items:center;
-  padding:12px 14px;gap:10px;flex-wrap:wrap; /* يلف على الموبايل */
-  background:#fff;border-bottom:1px solid var(--bd)
+/* ===== Topbar ===== */
+.topbar{
+  position:sticky;top:0;z-index:10;
+  background:#fff;border-bottom:1px solid var(--bd);
 }
+.topbar .inner{
+  max-width:1200px;margin:0 auto;
+  padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+}
+.brand{display:flex;gap:10px;align-items:center}
+.badge{
+  display:inline-flex;align-items:center;gap:6px;
+  background:#0b4ea914;border:1px solid #cfe2ff;color:#0b4ea9;
+  padding:5px 10px;border-radius:999px;font-weight:700;font-size:13px
+}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 
-/* ===== Layout ===== */
-.center{min-height:calc(100% - 60px);display:grid;place-items:center;padding:16px}
-.box{
-  width:min(1100px,96vw);background:var(--card);border:1px solid var(--bd);
-  border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.06);padding:16px
-}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+/* ===== Controls ===== */
 .btn{
   border:0;background:var(--pri);color:var(--pri-ink);
-  padding:10px 14px;border-radius:12px;cursor:pointer
+  padding:10px 14px;border-radius:12px;cursor:pointer;font-weight:700
 }
 .btn.ok{background:var(--ok)}
 .btn.danger{background:var(--danger)}
 .btn.secondary{background:#eef3fb;color:#0b4ea9}
-.input{border:1px solid var(--bd);border-radius:10px;padding:9px 10px;background:#fff}
-.pill{display:inline-block;background:#0b4ea914;border:1px solid #cfe2ff;color:#0b4ea9;padding:4px 10px;border-radius:999px;font-weight:600}
-.warn{color:var(--danger);font-weight:700}
-.right{text-align:right}
-.card{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:12px}
+.btn:active{transform:translateY(1px)}
+.input{border:1px solid var(--bd);border-radius:12px;padding:10px 12px;background:#fff;outline:0}
+.input:focus{border-color:#b7c8ff;box-shadow:0 0 0 3px rgba(34,97,238,.12)}
+.pill{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--bd);padding:8px 10px;border-radius:999px;font-weight:800}
+.warn{color:var(--danger);font-weight:900}
+.muted{color:var(--muted)}
+.card{
+  background:#fff;border:1px solid var(--bd);border-radius:var(--r);
+  box-shadow:var(--shadow);
+}
+.section-title{margin:0 0 10px;font-size:16px}
+
+/* ===== Page layout ===== */
+.page{
+  max-width:1200px;margin:0 auto;padding:14px;
+}
+.grid{
+  display:grid;grid-template-columns: 1.3fr .9fr; gap:12px; align-items:start;
+}
+.panel{padding:14px}
+.panel-head{
+  display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px
+}
+.customer-mini{
+  display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap
+}
+.customer-mini .name{font-weight:900}
+.customer-mini .line{font-size:13px;color:var(--muted)}
+.divider{height:1px;background:var(--bd);margin:12px 0}
 
 /* ===== Cart list ===== */
 .list{
-  max-height:420px;overflow:auto;border:1px solid var(--bd);
-  border-radius:10px;margin-top:8px
+  max-height:56vh;overflow:auto;border:1px solid var(--bd);
+  border-radius:14px;background:#fbfbfe
 }
-.line{
-  display:grid;grid-template-columns:2fr 90px 120px 120px 36px;
-  gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--bd)
+.empty{
+  padding:16px;color:var(--muted)
 }
-.line:last-child{border-bottom:0}
+
+/* item card */
+.item{
+  display:grid;grid-template-columns: 1fr 360px;
+  gap:10px;padding:10px;border-bottom:1px solid var(--bd);background:#fff
+}
+.item:last-child{border-bottom:0}
+.item .meta{display:flex;flex-direction:column;gap:2px}
+.item .meta strong{font-size:14px}
+.item .meta .sub{font-size:12px;color:var(--muted)}
+.item .ctrl{
+  display:grid;grid-template-columns: 90px 120px 1fr 40px;
+  gap:8px;align-items:center
+}
+.item .ctrl .total{
+  text-align:right;font-weight:900
+}
+.iconbtn{
+  width:40px;height:40px;border-radius:12px;border:1px solid var(--bd);
+  background:#fff;cursor:pointer
+}
+.iconbtn.danger{border-color:#ffd1cd;background:#fff5f5}
+.iconbtn:active{transform:translateY(1px)}
+
+/* ===== Summary (sticky) ===== */
+.summary{
+  position:sticky;top:74px;
+}
+.summary-grid{
+  display:grid;grid-template-columns: 1fr 1fr;gap:8px
+}
+.summary .pill{justify-content:space-between}
+.summary .pill b{font-size:14px}
+.summary .pill span{font-weight:900}
+.summary .inputs{
+  display:grid;grid-template-columns: 1fr 1fr;gap:8px;margin-top:10px
+}
 
 /* ===== Payments ===== */
-#paymentsArea .payrow .input{min-width:160px}
-
-/* ===== Responsive tweaks ===== */
-@media (max-width: 900px){
-  .line{grid-template-columns:1.5fr 80px 110px 100px 32px}
+.payments .payrow{
+  display:grid;grid-template-columns: 1fr 140px 1.2fr 90px;
+  gap:8px;align-items:center;margin-bottom:8px
 }
-@media (max-width: 720px){
-  .box{padding:14px;border-radius:14px}
-  .list{max-height:55vh}
-  .line{grid-template-columns:1.2fr 70px 100px 90px 30px}
-  #paymentsArea .payrow .input{min-width:120px}
+.payments .payrow .remove{width:100%;padding:10px 12px;border-radius:12px}
+#payWarn{margin:8px 0}
+
+/* ===== Footer action ===== */
+.footer-action{
+  display:flex;justify-content:flex-end;gap:10px;margin-top:12px
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 980px){
+  .grid{grid-template-columns: 1fr; }
+  .summary{position:relative;top:auto}
+  .list{max-height:52vh}
+  .item{grid-template-columns:1fr}
+  .item .ctrl{grid-template-columns: 1fr 1fr 1fr 44px}
 }
 @media (max-width: 520px){
-  .nav{padding:10px}
-  .box{width:100%;padding:12px;border-radius:12px}
-  .list{max-height:58vh}
-
-  /* خط العربة يتحول لسطرين: الاسم فوق، وتحت: كمية/سعر/إجمالي/حذف */
-  .line{
-    grid-template-columns:1fr 1fr; grid-auto-rows:auto;
-    gap:8px 10px; align-items:center;
-  }
-  .line > div:nth-child(1){grid-column:1 / -1}          /* الاسم */
-  .line > div:nth-child(2){grid-column:1 / 2}           /* الكمية */
-  .line > div:nth-child(3){grid-column:2 / 3}           /* السعر */
-  .line > div:nth-child(4){grid-column:1 / 2}           /* الإجمالي */
-  .line > div:nth-child(5){grid-column:2 / 3; justify-self:end} /* حذف */
-
-  .input{width:100%}
-  .row.payrow{width:100%}
-  .row.payrow .input,
-  .row.payrow select{flex:1 1 100%;width:100%}
-  .row.payrow .remove{width:100%}
-}
-@media (max-width: 360px){
-  /* خفّض الحواف وخلي الأزرار أسهل */
-  .btn{padding:10px 12px;border-radius:10px}
+  .page{padding:10px}
+  .panel{padding:12px}
+  .list{max-height:55vh}
+  .item .ctrl{grid-template-columns: 1fr 1fr; grid-auto-rows:auto}
+  .item .ctrl .total{grid-column:1 / -1;text-align:left}
+  .payments .payrow{grid-template-columns: 1fr; }
+  .payments .payrow .remove{width:100%}
 }
 </style>
 </head>
+
 <body>
-<nav class="nav">
-  <div><strong>POS — Cart Checkout</strong></div>
-  <div style="display:flex;gap:10px;flex-wrap:wrap">
-    <a class="btn secondary" href="/3zbawyh/public/select_category.php">+ أضف أصناف</a>
-    <a href="/3zbawyh/public/logout.php">خروج (<?=e($u['username'])?>)</a>
-  </div>
-</nav>
 
-<div class="center">
-  <!-- كارت بيانات العميل -->
-  <div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;width:min(1100px,96vw);flex-wrap:wrap">
-    <div>
-      <div style="font-weight:bold">العميل</div>
-      <div>
-        <?= htmlspecialchars($__customer_name !== '' ? $__customer_name : 'عميل نقدي') ?>
-        <?php if ($__customer_phone !== ''): ?>
-          — <?= htmlspecialchars($__customer_phone) ?>
-        <?php endif; ?>
+<header class="topbar">
+  <div class="inner">
+    <div class="brand">
+      <strong>POS</strong>
+      <span class="badge">Cart Checkout</span>
+    </div>
+    <div class="actions">
+      <a class="btn secondary" href="/3zbawyh/public/select_category.php">+ أضف أصناف</a>
+      <a class="btn secondary" href="/3zbawyh/public/customer_name.php">تعديل العميل</a>
+      <a href="/3zbawyh/public/logout.php" class="muted">خروج (<?=e($u['username'])?>)</a>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+  <div class="grid">
+
+    <!-- ===== Cart Panel ===== -->
+    <section class="card panel">
+      <div class="panel-head">
+        <div>
+          <h3 class="section-title">العربة</h3>
+          <div class="muted" style="font-size:13px">عدّل الكمية والسعر مباشرة. الحذف من زر ✖.</div>
+        </div>
+
+        <div class="customer-mini">
+          <div>
+            <div class="name">العميل</div>
+            <div class="line">
+              <?= htmlspecialchars($__customer_name !== '' ? $__customer_name : 'عميل نقدي') ?>
+              <?php if ($__customer_phone !== ''): ?>
+                — <?= htmlspecialchars($__customer_phone) ?>
+              <?php endif; ?>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-    <a class="btn secondary" href="/3zbawyh/public/customer_name.php">تعديل</a>
+
+      <div id="list" class="list"></div>
+    </section>
+
+    <!-- ===== Right Panel: Summary + Payments ===== -->
+    <aside class="card panel summary">
+      <h3 class="section-title">الملخّص والدفع</h3>
+
+      <div class="summary-grid">
+        <div class="pill"><b>الإجمالي</b><span><span id="grand">0.00</span> ج.م</span></div>
+        <div class="pill"><b>المدفوع</b><span><span id="paidSum">0.00</span> ج.م</span></div>
+        <div class="pill" style="grid-column:1 / -1"><b>الباقي (كاش)</b><span><span id="changePillText">0.00</span> ج.م</span></div>
+      </div>
+
+      <div class="inputs">
+        <label class="muted" style="font-size:13px">
+          خصم
+          <input id="discount" class="input" value="0" inputmode="decimal" style="width:100%;margin-top:6px">
+        </label>
+        <label class="muted" style="font-size:13px">
+          ضريبة
+          <input id="tax" class="input" value="0" inputmode="decimal" style="width:100%;margin-top:6px">
+        </label>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="payments">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <h4 style="margin:0">طرق الدفع</h4>
+          <button class="btn secondary" id="addPay" type="button">+ إضافة دفع</button>
+        </div>
+
+        <div id="payWarn" class="warn" style="display:none"></div>
+        <div id="paymentsArea" style="margin-top:10px"></div>
+
+        <div class="footer-action">
+          <button class="btn ok" id="finish" type="button">حفظ + طباعة</button>
+        </div>
+      </div>
+    </aside>
+
   </div>
-
-  <div class="box">
-    <h3 style="margin:0">العربة</h3>
-    
-    <div id="list" class="list"></div>
-
-    <div class="row" style="margin-top:10px">
-      خصم: <input id="discount" class="input" style="width:120px" value="0" inputmode="decimal">
-      ضريبة: <input id="tax" class="input" style="width:120px" value="0" inputmode="decimal">
-      <span class="pill">الإجمالي: <span id="grand">0.00</span> ج.م</span>
-    </div>
-
-    <hr>
-
-    <h4>طرق الدفع</h4>
-    <div id="payWarn" class="warn" style="display:none;margin-bottom:6px"></div>
-    <div id="paymentsArea"></div>
-    <div class="row" style="margin-top:6px">
-      <button class="btn secondary" id="addPay" type="button">+ إضافة دفع</button>
-      <span class="pill">المدفوع: <span id="paidSum">0.00</span> ج.م</span>
-      <!-- سيتم حقن Pill للباقي تلقائياً -->
-    </div>
-
-    <div class="row" style="justify-content:flex-end;margin-top:12px">
-      <button class="btn ok" id="finish" type="button">حفظ + طباعة</button>
-    </div>
-  </div>
-  
-</div>
+</main>
 
 <script>
 // ============ قيم العميل من الـPHP (من الـSession) ============
@@ -193,23 +282,39 @@ function loadCart(){
     refreshTotals();
   });
 }
+
 function renderCart(){
   const box = el('#list'); box.innerHTML='';
   if (!CART.length){
-    box.innerHTML='<div style="padding:16px;color:#666">العربة فارغة — أضف أصناف من صفحة الأصناف.</div>';
+    box.innerHTML='<div class="empty">العربة فارغة — أضف أصناف من صفحة الأصناف.</div>';
     return;
   }
+
   CART.forEach(l=>{
     const d = document.createElement('div');
-    d.className='line';
+    d.className='item';
     const stock = (l.stock==null ? '-' : l.stock);
+
     d.innerHTML = `
-      <div><strong>${l.name}</strong><div style="color:#666;font-size:12px">مخزون: ${stock}</div></div>
-      <div><input class="input qty" style="width:100%" value="${l.qty}" inputmode="decimal"></div>
-      <div><input class="input price" style="width:100%" value="${l.unit_price}" inputmode="decimal"></div>
-      <div class="right">${fmt(l.qty*l.unit_price)}</div>
-      <div class="right"><button class="btn danger rm" type="button">✖</button></div>
+      <div class="meta">
+        <strong>${l.name}</strong>
+        <div class="sub">مخزون: ${stock}</div>
+      </div>
+
+      <div class="ctrl">
+        <div>
+          <input class="input qty" style="width:100%" value="${l.qty}" inputmode="decimal" placeholder="الكمية">
+        </div>
+        <div>
+          <input class="input price" style="width:100%" value="${l.unit_price}" inputmode="decimal" placeholder="السعر">
+        </div>
+        <div class="total">${fmt(l.qty*l.unit_price)} ج.م</div>
+        <div style="text-align:right">
+          <button class="iconbtn danger rm" type="button" title="حذف">✖</button>
+        </div>
+      </div>
     `;
+
     d.querySelector('.qty').addEventListener('input', e=>{
       let q = Math.max(0, parseFloat(e.target.value||0));
       api('cart_update', {item_id:l.item_id, qty:q}).then(loadCart);
@@ -219,9 +324,11 @@ function renderCart(){
       api('cart_update', {item_id:l.item_id, unit_price:p}).then(loadCart);
     });
     d.querySelector('.rm').onclick = ()=> api('cart_update', {item_id:l.item_id, remove:1}).then(loadCart);
+
     box.appendChild(d);
   });
 }
+
 function refreshTotals(){
   let subtotal=0;
   CART.forEach(l=> subtotal += (+l.qty)*(+l.unit_price) );
@@ -236,7 +343,7 @@ el('#tax').addEventListener('input', refreshTotals);
 /* ========= Payments ========= */
 function paymentRow(method='cash', amount='', ref=''){
   const wrap = document.createElement('div');
-  wrap.className='row payrow';
+  wrap.className='payrow';
   wrap.innerHTML = `
     <select class="input method">
       <option value="cash">نقدي (Cash)</option>
@@ -245,8 +352,8 @@ function paymentRow(method='cash', amount='', ref=''){
       <option value="vodafone_cash">Vodafone Cash</option>
       <option value="agyl">آجل (دفعة مؤجلة)</option>
     </select>
-    <input class="input amount" style="width:140px" placeholder="المبلغ" inputmode="decimal">
-    <input class="input ref" style="width:220px" placeholder="رقم العملية / المرجع">
+    <input class="input amount" placeholder="المبلغ" inputmode="decimal">
+    <input class="input ref" placeholder="رقم العملية / المرجع">
     <button class="btn danger remove" type="button">حذف</button>
   `;
   wrap.querySelector('.method').value = method;
@@ -264,6 +371,8 @@ function paymentRow(method='cash', amount='', ref=''){
       refEl.placeholder = (m === 'instapay')
         ? 'أدخل رقم العملية (إجباري)'
         : 'رقم العملية / هاتف المُحوِّل (إجباري)';
+    } else if (!needsRef) {
+      refEl.placeholder = 'رقم العملية / المرجع';
     }
   }
 
@@ -329,51 +438,12 @@ function updatePaidSum(pays, total, changeDue=0){
   const sum = pays.reduce((a,p)=> a + (+p.amount||0), 0);
   el('#paidSum').textContent = (sum||0).toFixed(2);
 
-  let pill = document.querySelector('#changePill');
-  if (!pill) {
-    pill = document.createElement('span');
-    pill.id = 'changePill';
-    pill.className = 'pill';
-    // اتأكد إن فيه Row بعد زرار إضافة الدفع
-    const rows = document.querySelectorAll('.row');
-    const lastRow = rows[rows.length-1];
-    lastRow.appendChild(pill);
-  }
-  pill.textContent = `الباقي (كاش): ${ (changeDue||0).toFixed(2) } ج.م`;
+  // بدل ما نحقن pill، بنعرضه في الملخص الثابت
+  el('#changePillText').textContent = (changeDue||0).toFixed(2);
 }
 
 function showPayError(msg){ const w=el('#payWarn'); w.style.display='block'; w.textContent=msg; }
 function clearPayError(){ const w=el('#payWarn'); w.style.display='none'; w.textContent=''; }
-
-function summarizeForSave(pays){
-  const validPays = pays.filter(p => (+p.amount || 0) > 0.0001);
-
-  const sumBy = { cash:0, visa:0, instapay:0, vodafone_cash:0, agyl:0 };
-  for (const p of validPays) {
-    if (sumBy.hasOwnProperty(p.method)) sumBy[p.method] += (+p.amount || 0);
-  } 
-
-  if (validPays.length === 0) {
-    return { save_payment_method: 'cash', payment_note: 'no payments' };
-  }
-
-  const distinct = Object.entries(sumBy).filter(([_,v]) => v > 0.0001);
-  if (distinct.length === 1) {
-    const onlyKey = distinct[0][0];
-    const mapForSave = { cash:'cash', visa:'visa', instapay:'instapay', vodafone_cash:'vodafone_cash', agyl:'agel' };
-    return {
-      save_payment_method: mapForSave[onlyKey] || 'mixed',
-      payment_note: `Single: ${onlyKey}=${distinct[0][1].toFixed(2)}`
-    };
-  }
-
-  const note =
-    `Dist: cash=${sumBy.cash.toFixed(2)}, visa=${sumBy.visa.toFixed(2)}, ` +
-    `instapay=${sumBy.instapay.toFixed(2)}, vodafone_cash=${sumBy.vodafone_cash.toFixed(2)}, ` +
-    `agyl=${sumBy.agyl.toFixed(2)}`;
-
-  return { save_payment_method: 'mixed', payment_note: note };
-}
 
 /* ========= Finish ========= */
 el('#finish').onclick = ()=>{
@@ -423,5 +493,6 @@ el('#addPay').onclick = ()=> addPayment('cash','', '');
 addPayment('cash','', '');
 loadCart();
 </script>
+
 </body>
 </html>
