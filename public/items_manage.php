@@ -662,8 +662,10 @@ if(isset($_GET['edit'])){
           <select class="input" id="barcode_type" name="barcode_type">
             <option value="">— اختر —</option>
             <option value="n">n - neckles</option>
-            <option value="a">a - ansyal</option>
+            <option value="b">b - Braclete</option>
             <option value="r">r - ring</option>
+            <option value="e">e - ering</option>
+            <option value="a">a - ankel</option>
           </select>
         </label>
 
