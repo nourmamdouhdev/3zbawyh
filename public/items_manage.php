@@ -157,6 +157,25 @@ if (($_GET['ajax'] ?? '') === 'next_barcode' && $hasSKU && $canManageBarcode) {
   exit;
 }
 
+/** AJAX: حفظ SKU مباشرة للصنف */
+if (($_GET['ajax'] ?? '') === 'save_sku' && $hasSKU && $canManageBarcode) {
+  header('Content-Type: application/json; charset=utf-8');
+
+  $id = (int)($_POST['id'] ?? 0);
+  $sku = trim((string)($_POST['sku'] ?? ''));
+
+  if ($id <= 0 || $sku === '') {
+    echo json_encode(['ok'=>false,'error'=>'invalid data']);
+    exit;
+  }
+
+  $st = $db->prepare("UPDATE items SET sku=? WHERE id=?");
+  $st->execute([$sku, $id]);
+
+  echo json_encode(['ok'=>true,'error'=>null]);
+  exit;
+}
+
 /** Load categories */
 $cats = [];
 if($hasCatId){
@@ -549,6 +568,7 @@ if(isset($_GET['edit'])){
     <form method="post" class="form-grid" enctype="multipart/form-data">
       <input type="hidden" name="action" value="<?= $editing? 'update':'create' ?>">
       <?php if($editing): ?><input type="hidden" name="id" value="<?=$editing['id']?>"><?php endif; ?>
+      <?php if($hasSKU): ?><input type="hidden" name="sku" id="item_sku" value="<?=e($editing['sku'] ?? '')?>"><?php endif; ?>
 
       <label>الاسم
         <input class="input" name="name" required value="<?=e($editing['name'] ?? '')?>">
@@ -872,6 +892,8 @@ const barcodeValue = document.getElementById('barcode_value');
 const barcodeBtn = document.getElementById('barcode_generate');
 const barcodePrintBtn = document.getElementById('barcode_print');
 const barcodePreview = document.getElementById('barcode_preview');
+const itemSkuInput = document.getElementById('item_sku');
+const editingItemId = <?= json_encode($editing['id'] ?? null) ?>;
 
 function buildBarcodeValue() {
   if (!barcodeType || !barcodeNumber || !barcodeCost) return '';
@@ -916,6 +938,20 @@ function renderBarcode(val) {
   }
 }
 
+async function saveSkuForEditing(val) {
+  if (!editingItemId || !val) return;
+  try {
+    const body = new URLSearchParams();
+    body.set('id', editingItemId);
+    body.set('sku', val);
+    await fetch('?ajax=save_sku', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body
+    });
+  } catch (e) {}
+}
+
 if (barcodeValue && barcodeValue.value.trim()) renderBarcode(barcodeValue.value.trim());
 if (barcodeValue) barcodeValue.addEventListener('input', ()=> renderBarcode(barcodeValue.value.trim()));
 
@@ -932,7 +968,9 @@ if (barcodeBtn && barcodeValue) {
     const val = buildBarcodeValue();
     if (val) {
       barcodeValue.value = val;
+      if (itemSkuInput) itemSkuInput.value = val;
       renderBarcode(val);
+      await saveSkuForEditing(val);
     }
   });
 }
