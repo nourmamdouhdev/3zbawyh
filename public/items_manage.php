@@ -662,10 +662,8 @@ if(isset($_GET['edit'])){
           <select class="input" id="barcode_type" name="barcode_type">
             <option value="">— اختر —</option>
             <option value="n">n - neckles</option>
-            <option value="b">b - Braclete</option>
+            <option value="a">a - ansyal</option>
             <option value="r">r - ring</option>
-            <option value="e">e - ering</option>
-            <option value="a">a - ankel</option>
           </select>
         </label>
 
@@ -982,43 +980,7 @@ function printBarcodeOnly() {
   if (!val) return;
 
   renderBarcode(val);
-
-  const svg = document.getElementById('barcode_preview');
-  if (!svg) return;
-
-  const w = window.open('', '_blank', 'width=480,height=320');
-  if (!w) return;
-
-  const svgHtml = svg.outerHTML;
-  const receiptWidth = '58mm'; // غيّرها 80mm لو طابعتك 80
-
-  w.document.open();
-  w.document.write(`
-<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <title>Barcode</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root{ --receipt-width: ${receiptWidth}; }
-    *{ box-sizing:border-box; }
-    html,body{ margin:0; padding:0; background:#fff; color:#000; }
-    body{ width: var(--receipt-width); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace; }
-    @page{ size: var(--receipt-width) auto; margin: 0; }
-    .wrap{ padding: 6px 6px 8px; display:flex; align-items:center; justify-content:center; }
-    svg{ width: calc(var(--receipt-width) - 12mm); height:auto; }
-  </style>
-</head>
-<body>
-  <div class="wrap">${svgHtml}</div>
-  <script>
-    window.onload = () => { window.focus(); window.print(); window.onafterprint = () => window.close(); };
-  <\/script>
-</body>
-</html>
-  `);
-  w.document.close();
+  window.print();
 }
 
 if (barcodePrintBtn) barcodePrintBtn.addEventListener('click', printBarcodeOnly);
