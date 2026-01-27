@@ -190,10 +190,21 @@ $menu = $db->query("
     padding:22px 10px;
   }
 
+  :root{
+    --barcode-page-size: 3in;
+  }
+
   @media print{
-    body{ background:#fff; }
+    @page{ size: var(--barcode-page-size) var(--barcode-page-size); margin: 0; }
+    html, body{ width: var(--barcode-page-size); height: var(--barcode-page-size); }
+    body{ background:#fff; margin:0; }
     .container > *:not(.print-only){ display:none !important; }
     .print-only{ box-shadow:none; border:0; }
+    .print-only{ width: var(--barcode-page-size); height: var(--barcode-page-size); margin:0 auto; }
+    .barcode-area{ height:100%; align-content:center; }
+    .preview{ border:0; padding:0; min-height:auto; }
+    .preview svg{ width:100%; height:auto; max-height:1.6in; }
+    #previewHint{ display:none !important; }
   }
 </style>
 </head>
@@ -227,7 +238,7 @@ $menu = $db->query("
         <div style="font-weight:900;font-size:18px;margin-bottom:6px" id="itemName">—</div>
         <div class="muted">قيمة الباركود (SKU): <span id="itemSku">—</span></div>
         <div class="muted" style="margin-top:8px">
-          ملاحظة: الصفحة دي بتطبع الباركود فقط (بدون أسعار/تفاصيل تانية).
+          ملاحظة: الصفحة دي بتطبع الباركود فقط (بدون أسعار/تفاصيل تانية) بمقاس 3×3 إنش.
         </div>
       </div>
 
@@ -263,6 +274,7 @@ $menu = $db->query("
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
 <script>
 const hasSKU = <?= json_encode($hasSKU) ?>;
 
@@ -294,11 +306,11 @@ function renderBarcode(val){
     window.JsBarcode(barcodePreview, val, {
       format: 'CODE128',
       lineColor: '#111',
-      width: 3,
-      height: 90,
+      width: 2,
+      height: 70,
       displayValue: true,
-      fontSize: 18,
-      margin: 10
+      fontSize: 16,
+      margin: 8
     });
   }
 }
@@ -408,50 +420,71 @@ document.getElementById('clearBtn').addEventListener('click', ()=>{
   selectItem('', '');
 });
 
-function printBarcodeOnly(){
+function svgToPngBase64(svgEl, sizeInInches = 3, dpi = 300){
+  return new Promise((resolve, reject) => {
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(svgEl);
+    const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
+    const img = new Image();
+    img.onload = () => {
+      const px = Math.round(sizeInInches * dpi);
+      const canvas = document.createElement('canvas');
+      canvas.width = px;
+      canvas.height = px;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas context unavailable'));
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, px, px);
+      const scale = Math.min(px / img.width, px / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      const x = (px - w) / 2;
+      const y = (px - h) / 2;
+      ctx.drawImage(img, x, y, w, h);
+      const dataUrl = canvas.toDataURL('image/png');
+      resolve(dataUrl.split(',')[1]);
+    };
+    img.onerror = reject;
+    img.src = svgDataUrl;
+  });
+}
+
+async function tryQzPrint(svgEl){
+  if (!window.qz) return false;
+  try{
+    if (!qz.websocket.isActive()) {
+      await qz.websocket.connect();
+    }
+    const printer = await qz.printers.getDefault();
+    if (!printer) throw new Error('No default printer');
+    const config = qz.configs.create(printer, {
+      size: { width: 3, height: 3, unit: 'in' },
+      scaleContent: true,
+      copies: 1
+    });
+    const pngBase64 = await svgToPngBase64(svgEl, 3);
+    await qz.print(config, [{ type: 'image', format: 'base64', data: pngBase64 }]);
+    return true;
+  }catch(e){
+    console.warn('QZ print failed, falling back to browser print.', e);
+    return false;
+  }
+}
+
+async function printBarcodeOnly(){
   if(!currentSKU) return;
 
   renderBarcode(currentSKU);
-
   const svg = document.getElementById('barcode_preview');
   if(!svg) return;
 
-  const w = window.open('', '_blank', 'width=480,height=320');
-  if(!w) return;
-
-  const svgHtml = svg.outerHTML;
-  const receiptWidth = '58mm'; // غيّرها 80mm لو طابعتك 80
-
-  w.document.open();
-  w.document.write(`
-<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <title>Barcode</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root{ --receipt-width: ${receiptWidth}; }
-    *{ box-sizing:border-box; }
-    html,body{ margin:0; padding:0; background:#fff; color:#000; }
-    body{ width: var(--receipt-width); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace; }
-    @page{ size: var(--receipt-width) auto; margin: 0; }
-    .wrap{ padding: 6px 6px 8px; display:flex; align-items:center; justify-content:center; }
-    svg{ width: calc(var(--receipt-width) - 12mm); height:auto; }
-  </style>
-</head>
-<body>
-  <div class="wrap">${svgHtml}</div>
-  <script>
-    window.onload = () => { window.focus(); window.print(); window.onafterprint = () => window.close(); };
-  <\/script>
-</body>
-</html>
-  `);
-  w.document.close();
+  const printed = await tryQzPrint(svg);
+  if(!printed){
+    window.print();
+  }
 }
 
-printBtn.addEventListener('click', printBarcodeOnly);
+printBtn.addEventListener('click', ()=> { void printBarcodeOnly(); });
 
 // init
 selectItem('', '');
