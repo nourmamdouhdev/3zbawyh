@@ -455,10 +455,16 @@ async function tryQzPrint(svgEl){
     if (!qz.websocket.isActive()) {
       await qz.websocket.connect();
     }
-    const printer = await qz.printers.getDefault();
+    let printer = null;
+    try{
+      printer = await qz.printers.find('XP-233B');
+    }catch(e){}
+    if (!printer) {
+      printer = await qz.printers.getDefault();
+    }
     if (!printer) throw new Error('No default printer');
     const config = qz.configs.create(printer, {
-      size: { width: 3, height: 3, unit: 'in' },
+      size: { width: 58, height: 58, unit: 'mm' },
       scaleContent: true,
       copies: 1
     });
