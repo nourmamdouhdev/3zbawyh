@@ -191,19 +191,20 @@ $menu = $db->query("
   }
 
   :root{
-    --barcode-page-size: 3in;
+    --barcode-page-width: 40mm;
+    --barcode-page-height: 30mm;
   }
 
   @media print{
-    @page{ size: var(--barcode-page-size) var(--barcode-page-size); margin: 0; }
-    html, body{ width: var(--barcode-page-size); height: var(--barcode-page-size); }
+    @page{ size: var(--barcode-page-width) var(--barcode-page-height); margin: 0; }
+    html, body{ width: var(--barcode-page-width); height: var(--barcode-page-height); }
     body{ background:#fff; margin:0; }
     .container > *:not(.print-only){ display:none !important; }
     .print-only{ box-shadow:none; border:0; }
-    .print-only{ width: var(--barcode-page-size); height: var(--barcode-page-size); margin:0 auto; }
+    .print-only{ width: var(--barcode-page-width); height: var(--barcode-page-height); margin:0 auto; }
     .barcode-area{ height:100%; align-content:center; }
     .preview{ border:0; padding:0; min-height:auto; }
-    .preview svg{ width:100%; height:auto; max-height:1.6in; }
+    .preview svg{ width:100%; height:auto; max-height:22mm; }
     #previewHint{ display:none !important; }
   }
 </style>
@@ -238,7 +239,7 @@ $menu = $db->query("
         <div style="font-weight:900;font-size:18px;margin-bottom:6px" id="itemName">—</div>
         <div class="muted">قيمة الباركود (SKU): <span id="itemSku">—</span></div>
         <div class="muted" style="margin-top:8px">
-          ملاحظة: الصفحة دي بتطبع الباركود فقط (بدون أسعار/تفاصيل تانية) بمقاس 3×3 إنش.
+          ملاحظة: الصفحة دي بتطبع الباركود فقط (بدون أسعار/تفاصيل تانية) بمقاس 40×30 مم.
         </div>
       </div>
 
@@ -295,6 +296,9 @@ const previewHint = document.getElementById('previewHint');
 
 let currentSKU = '';
 let currentName = '';
+let isPrinting = false;
+const LABEL_WIDTH_MM = 40;
+const LABEL_HEIGHT_MM = 30;
 
 function renderBarcode(val){
   if(!barcodePreview) return;
@@ -306,11 +310,11 @@ function renderBarcode(val){
     window.JsBarcode(barcodePreview, val, {
       format: 'CODE128',
       lineColor: '#111',
-      width: 2,
-      height: 70,
+      width: 1.5,
+      height: 50,
       displayValue: true,
-      fontSize: 16,
-      margin: 8
+      fontSize: 14,
+      margin: 6
     });
   }
 }
@@ -420,13 +424,29 @@ document.getElementById('clearBtn').addEventListener('click', ()=>{
   selectItem('', '');
 });
 
-function svgToPngBase64(svgEl, sizeInInches = 3, dpi = 300){
+function mmToIn(mm){ return mm / 25.4; }
+
+function svgToPngBase64(svgEl, widthMm, heightMm, dpi = 300){
   return new Promise((resolve, reject) => {
     const serializer = new XMLSerializer();
     const svgString = serializer.serializeToString(svgEl);
     const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
     const img = new Image();
     img.onload = () => {
+      const pxW = Math.round(mmToIn(widthMm) * dpi);
+      const pxH = Math.round(mmToIn(heightMm) * dpi);
+      const canvas = document.createElement('canvas');
+      canvas.width = pxW;
+      canvas.height = pxH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas context unavailable'));
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, pxW, pxH);
+      const scale = Math.min(pxW / img.width, pxH / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      const x = (pxW - w) / 2;
+      const y = (pxH - h) / 2;
       const px = Math.round(sizeInInches * dpi);
       const canvas = document.createElement('canvas');
       canvas.width = px;
@@ -464,11 +484,11 @@ async function tryQzPrint(svgEl){
     }
     if (!printer) throw new Error('No default printer');
     const config = qz.configs.create(printer, {
-      size: { width: 58, height: 58, unit: 'mm' },
+      size: { width: LABEL_WIDTH_MM, height: LABEL_HEIGHT_MM, unit: 'mm' },
       scaleContent: true,
       copies: 1
     });
-    const pngBase64 = await svgToPngBase64(svgEl, 3);
+    const pngBase64 = await svgToPngBase64(svgEl, LABEL_WIDTH_MM, LABEL_HEIGHT_MM);
     await qz.print(config, [{ type: 'image', format: 'base64', data: pngBase64 }]);
     return true;
   }catch(e){
@@ -479,15 +499,24 @@ async function tryQzPrint(svgEl){
 
 async function printBarcodeOnly(){
   if(!currentSKU) return;
+  if (isPrinting) return;
+  isPrinting = true;
+  if (printBtn) printBtn.disabled = true;
 
   renderBarcode(currentSKU);
   const svg = document.getElementById('barcode_preview');
-  if(!svg) return;
+  if(!svg) {
+    isPrinting = false;
+    if (printBtn) printBtn.disabled = false;
+    return;
+  }
 
   const printed = await tryQzPrint(svg);
   if(!printed){
     window.print();
   }
+  isPrinting = false;
+  if (printBtn) printBtn.disabled = false;
 }
 
 printBtn.addEventListener('click', ()=> { void printBarcodeOnly(); });
