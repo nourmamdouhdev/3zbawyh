@@ -526,10 +526,23 @@ if(isset($_GET['edit'])){
   .barcode-preview svg{ max-width:100%; height:auto; }
   .barcode-hint{ margin-top:8px; font-size:12px; color:var(--muted); }
 
+  :root{
+    --barcode-page-width: 40mm;
+    --barcode-page-height: 30mm;
+  }
+
   @media print{
-    body{ background:#fff; }
+    @page{ size: var(--barcode-page-width) var(--barcode-page-height); margin: 0; }
+    html, body{ width: var(--barcode-page-width); height: var(--barcode-page-height); }
+    body{ background:#fff; margin:0; }
     .container > *:not(.barcode-print-area){ display:none !important; }
     .barcode-print-area{ box-shadow:none; border:0; }
+    .barcode-print-area{ width: var(--barcode-page-width); height: var(--barcode-page-height); margin:0 auto; }
+    .barcode-print-area .barcode-box-head,
+    .barcode-print-area .barcode-options,
+    .barcode-print-area .barcode-hint{ display:none !important; }
+    .barcode-print-area .barcode-preview{ border:0; padding:0; margin:0; height:100%; display:flex; align-items:center; justify-content:center; }
+    .barcode-print-area .barcode-preview svg{ width:100%; height:auto; max-height:22mm; }
   }
 </style>
 </head>
@@ -687,7 +700,7 @@ if(isset($_GET['edit'])){
       </div>
 
       <div class="barcode-hint">
-        التنسيق: حرف النوع + رقم 6 خانات + 00 + سعر اليابان — مثال: n00000100150
+        التنسيق: حرف النوع + رقم 6 خانات + 00 + سعر اليابان — مثال: n00000100150 (مقاس الطباعة 40×30 مم)
       </div>
     </div>
   <?php endif; ?>
@@ -795,6 +808,7 @@ if(isset($_GET['edit'])){
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
 <script>
 /** تعبئة الفرعيات */
 async function fillSubcats(selectCat, selectSub, selectedId){
@@ -896,6 +910,9 @@ const barcodePrintBtn = document.getElementById('barcode_print');
 const barcodePreview = document.getElementById('barcode_preview');
 const itemSkuInput = document.getElementById('item_sku');
 const editingItemId = <?= json_encode($editing['id'] ?? null) ?>;
+let isPrinting = false;
+const LABEL_WIDTH_MM = 40;
+const LABEL_HEIGHT_MM = 30;
 
 function buildBarcodeValue() {
   if (!barcodeType || !barcodeNumber || !barcodeCost) return '';
@@ -931,11 +948,11 @@ function renderBarcode(val) {
     window.JsBarcode(barcodePreview, val, {
       format: 'CODE128',
       lineColor: '#111',
-      width: 3,
-      height: 90,
+      width: 1.5,
+      height: 50,
       displayValue: true,
-      fontSize: 18,
-      margin: 10
+      fontSize: 14,
+      margin: 6
     });
   }
 }
@@ -977,51 +994,90 @@ if (barcodeBtn && barcodeValue) {
   });
 }
 
-function printBarcodeOnly() {
-  const val = (barcodeValue?.value || '').trim();
-  if (!val) return;
+function mmToIn(mm){ return mm / 25.4; }
 
-  renderBarcode(val);
-
-  const svg = document.getElementById('barcode_preview');
-  if (!svg) return;
-
-  const w = window.open('', '_blank', 'width=480,height=320');
-  if (!w) return;
-
-  const svgHtml = svg.outerHTML;
-  const receiptWidth = '58mm'; // غيّرها 80mm لو طابعتك 80
-
-  w.document.open();
-  w.document.write(`
-<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <title>Barcode</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root{ --receipt-width: ${receiptWidth}; }
-    *{ box-sizing:border-box; }
-    html,body{ margin:0; padding:0; background:#fff; color:#000; }
-    body{ width: var(--receipt-width); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace; }
-    @page{ size: var(--receipt-width) auto; margin: 0; }
-    .wrap{ padding: 6px 6px 8px; display:flex; align-items:center; justify-content:center; }
-    svg{ width: calc(var(--receipt-width) - 12mm); height:auto; }
-  </style>
-</head>
-<body>
-  <div class="wrap">${svgHtml}</div>
-  <script>
-    window.onload = () => { window.focus(); window.print(); window.onafterprint = () => window.close(); };
-  <\/script>
-</body>
-</html>
-  `);
-  w.document.close();
+function svgToPngBase64(svgEl, widthMm, heightMm, dpi = 300){
+  return new Promise((resolve, reject) => {
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(svgEl);
+    const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
+    const img = new Image();
+    img.onload = () => {
+      const pxW = Math.round(mmToIn(widthMm) * dpi);
+      const pxH = Math.round(mmToIn(heightMm) * dpi);
+      const canvas = document.createElement('canvas');
+      canvas.width = pxW;
+      canvas.height = pxH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas context unavailable'));
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, pxW, pxH);
+      const scale = Math.min(pxW / img.width, pxH / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      const x = (pxW - w) / 2;
+      const y = (pxH - h) / 2;
+      ctx.drawImage(img, x, y, w, h);
+      const dataUrl = canvas.toDataURL('image/png');
+      resolve(dataUrl.split(',')[1]);
+    };
+    img.onerror = reject;
+    img.src = svgDataUrl;
+  });
 }
 
-if (barcodePrintBtn) barcodePrintBtn.addEventListener('click', printBarcodeOnly);
+async function tryQzPrint(svgEl){
+  if (!window.qz) return false;
+  try{
+    if (!qz.websocket.isActive()) {
+      await qz.websocket.connect();
+    }
+    let printer = null;
+    try{
+      printer = await qz.printers.find('XP-233B');
+    }catch(e){}
+    if (!printer) {
+      printer = await qz.printers.getDefault();
+    }
+    if (!printer) throw new Error('No default printer');
+    const config = qz.configs.create(printer, {
+      size: { width: LABEL_WIDTH_MM, height: LABEL_HEIGHT_MM, unit: 'mm' },
+      scaleContent: true,
+      copies: 1
+    });
+    const pngBase64 = await svgToPngBase64(svgEl, LABEL_WIDTH_MM, LABEL_HEIGHT_MM);
+    await qz.print(config, [{ type: 'image', format: 'base64', data: pngBase64 }]);
+    return true;
+  }catch(e){
+    console.warn('QZ print failed, falling back to browser print.', e);
+    return false;
+  }
+}
+
+async function printBarcodeOnly() {
+  const val = (barcodeValue?.value || '').trim();
+  if (!val) return;
+  if (isPrinting) return;
+  isPrinting = true;
+  if (barcodePrintBtn) barcodePrintBtn.disabled = true;
+
+  renderBarcode(val);
+  const svg = document.getElementById('barcode_preview');
+  if (!svg) {
+    isPrinting = false;
+    if (barcodePrintBtn) barcodePrintBtn.disabled = false;
+    return;
+  }
+
+  const printed = await tryQzPrint(svg);
+  if (!printed) {
+    window.print();
+  }
+  isPrinting = false;
+  if (barcodePrintBtn) barcodePrintBtn.disabled = false;
+}
+
+if (barcodePrintBtn) barcodePrintBtn.addEventListener('click', ()=> { void printBarcodeOnly(); });
 </script>
 </body>
 </html>
