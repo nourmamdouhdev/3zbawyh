@@ -807,6 +807,7 @@ if(isset($_GET['edit'])){
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
 <script>
 /** تعبئة الفرعيات */
 async function fillSubcats(selectCat, selectSub, selectedId){
@@ -989,15 +990,72 @@ if (barcodeBtn && barcodeValue) {
   });
 }
 
-function printBarcodeOnly() {
+function svgToPngBase64(svgEl, sizeInInches = 3, dpi = 300){
+  return new Promise((resolve, reject) => {
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(svgEl);
+    const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
+    const img = new Image();
+    img.onload = () => {
+      const px = Math.round(sizeInInches * dpi);
+      const canvas = document.createElement('canvas');
+      canvas.width = px;
+      canvas.height = px;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Canvas context unavailable'));
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, px, px);
+      const scale = Math.min(px / img.width, px / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      const x = (px - w) / 2;
+      const y = (px - h) / 2;
+      ctx.drawImage(img, x, y, w, h);
+      const dataUrl = canvas.toDataURL('image/png');
+      resolve(dataUrl.split(',')[1]);
+    };
+    img.onerror = reject;
+    img.src = svgDataUrl;
+  });
+}
+
+async function tryQzPrint(svgEl){
+  if (!window.qz) return false;
+  try{
+    if (!qz.websocket.isActive()) {
+      await qz.websocket.connect();
+    }
+    const printer = await qz.printers.getDefault();
+    if (!printer) throw new Error('No default printer');
+    const config = qz.configs.create(printer, {
+      size: { width: 3, height: 3, unit: 'in' },
+      scaleContent: true,
+      copies: 1
+    });
+    const pngBase64 = await svgToPngBase64(svgEl, 3);
+    await qz.print(config, [{ type: 'image', format: 'base64', data: pngBase64 }]);
+    return true;
+  }catch(e){
+    console.warn('QZ print failed, falling back to browser print.', e);
+    return false;
+  }
+}
+
+async function printBarcodeOnly() {
   const val = (barcodeValue?.value || '').trim();
   if (!val) return;
 
   renderBarcode(val);
-  window.print();
+  const svg = document.getElementById('barcode_preview');
+  if (!svg) return;
+
+  const printed = await tryQzPrint(svg);
+  if (!printed) {
+    window.print();
+  }
 }
 
-if (barcodePrintBtn) barcodePrintBtn.addEventListener('click', printBarcodeOnly);
+if (barcodePrintBtn) barcodePrintBtn.addEventListener('click', ()=> { void printBarcodeOnly(); });
 </script>
 </body>
 </html>
