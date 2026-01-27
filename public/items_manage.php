@@ -675,10 +675,8 @@ if(isset($_GET['edit'])){
           <select class="input" id="barcode_type" name="barcode_type">
             <option value="">— اختر —</option>
             <option value="n">n - neckles</option>
-            <option value="b">b - Braclete</option>
+            <option value="a">a - ansyal</option>
             <option value="r">r - ring</option>
-            <option value="e">e - ering</option>
-            <option value="a">a - ankel</option>
           </select>
         </label>
 
@@ -1062,19 +1060,7 @@ async function printBarcodeOnly() {
   if (barcodePrintBtn) barcodePrintBtn.disabled = true;
 
   renderBarcode(val);
-  const svg = document.getElementById('barcode_preview');
-  if (!svg) {
-    isPrinting = false;
-    if (barcodePrintBtn) barcodePrintBtn.disabled = false;
-    return;
-  }
-
-  const printed = await tryQzPrint(svg);
-  if (!printed) {
-    window.print();
-  }
-  isPrinting = false;
-  if (barcodePrintBtn) barcodePrintBtn.disabled = false;
+  window.print();
 }
 
 if (barcodePrintBtn) barcodePrintBtn.addEventListener('click', ()=> { void printBarcodeOnly(); });
