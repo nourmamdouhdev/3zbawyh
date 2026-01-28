@@ -91,7 +91,6 @@ if(!$hasItems){ die('جدول items غير موجود.'); }
 $hasSKU         = has_col($db,'items','sku');
 $hasPrice       = has_col($db,'items','unit_price');
 $hasWholesale   = has_col($db,'items','price_wholesale');
-$hasReorder     = has_col($db,'items','reorder_level');
 $hasStock       = has_col($db,'items','stock');
 $hasCatId       = has_col($db,'items','category_id')        && $hasCategories;
 $hasSubcatId    = has_col($db,'items','subcategory_id')     && $hasSubcatsTbl;
@@ -220,9 +219,6 @@ try{
       $fields[]='price_wholesale';
       $vals[] = (trim($_POST['price_wholesale'] ?? '')!=='')? trim($_POST['price_wholesale']) : 0; $qs[]='?';
     }
-    if($hasReorder){
-      $fields[]='reorder_level'; $vals[] = (int)($_POST['reorder_level'] ?? 0); $qs[]='?';
-    }
     if($hasStock){
       $fields[]='stock'; $vals[] = (int)($_POST['stock'] ?? 0); $qs[]='?';
     }
@@ -300,9 +296,6 @@ try{
     if($hasWholesale){
       $sets[]='price_wholesale=?';
       $vals[] = (trim($_POST['price_wholesale'] ?? '')!=='')? trim($_POST['price_wholesale']) : 0;
-    }
-    if($hasReorder){
-      $sets[]='reorder_level=?'; $vals[] = (int)($_POST['reorder_level'] ?? 0);
     }
     if($hasStock){
       $sets[]='stock=?'; $vals[] = (int)($_POST['stock'] ?? 0);
@@ -707,7 +700,7 @@ if(isset($_GET['edit'])){
   /* Keep SKU visible on mobile */
   @media (max-width:640px){
     .page-head{ align-items:flex-start; flex-direction:column; }
-    .col-image, .col-reorder, .col-sub, .col-subsub { display:none; }
+    .col-image, .col-sub, .col-subsub { display:none; }
     .btn{ padding:8px 12px; border-radius:10px; }
     .img-thumb{ width:40px; height:40px; }
   }
@@ -865,12 +858,6 @@ if(isset($_GET['edit'])){
       </label>
       <?php endif; ?>
 
-      <?php if($hasReorder): ?>
-      <label>حد إعادة الطلب
-        <input class="input" name="reorder_level" type="number" step="1" value="<?=e($editing['reorder_level'] ?? 0)?>">
-      </label>
-      <?php endif; ?>
-
       <?php if($hasStock): ?>
       <label>المخزون
         <input class="input" name="stock" type="number" step="1" min="0" value="<?= e($editing['stock'] ?? 0) ?>">
@@ -952,10 +939,6 @@ if(isset($_GET['edit'])){
       <div class="barcode-preview">
         <svg id="barcode_preview"></svg>
       </div>
-
-      <div class="barcode-hint">
-        التنسيق: حرف النوع + رقم 6 خانات + 00 + سعر اليابان — مثال: n00000100150 (مقاس الطباعة 40×30 مم)
-      </div>
     </div>
   <?php endif; ?>
 
@@ -982,7 +965,6 @@ if(isset($_GET['edit'])){
             <?php if($hasCatId): ?><th class="col-cat">التصنيف</th><?php endif; ?>
             <?php if($hasSubcatId): ?><th class="col-sub">الفرعي</th><?php endif; ?>
             <?php if($hasSubSubId): ?><th class="col-subsub">الفرعي الفرعي</th><?php endif; ?>
-            <?php if($hasReorder): ?><th class="col-reorder">حد إعادة الطلب</th><?php endif; ?>
             <th>إجراءات</th>
           </tr>
         </thead>
@@ -1023,9 +1005,8 @@ if(isset($_GET['edit'])){
                 <td class="col-stock">
                   <?php
                     $stk = (int)($it['stock'] ?? 0);
-                    $low = ($hasReorder && isset($it['reorder_level']) && $stk <= (int)$it['reorder_level']);
                   ?>
-                  <span class="pill" style="<?= $low ? 'background:#fff7ed;border-color:#fbbf24' : '' ?>">
+                  <span class="pill">
                     <?= $stk ?>
                   </span>
                 </td>
@@ -1041,10 +1022,6 @@ if(isset($_GET['edit'])){
 
               <?php if($hasSubSubId): ?>
                 <td class="col-subsub"><span class="pill"><?=e($it['sub_subcategory_name'] ?? '—')?></span></td>
-              <?php endif; ?>
-
-              <?php if($hasReorder): ?>
-                <td class="col-reorder"><?= (int)($it['reorder_level'] ?? 0) ?></td>
               <?php endif; ?>
 
               <td>

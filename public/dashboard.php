@@ -231,6 +231,10 @@ $latestInvoices = safe_fetch(function() use($db,$dateCol,$LINE_TOT,$CUSTOMER_NAM
         <strong>الأصناف</strong>
         <div class="muted">إدارة وربط بتصنيف</div>
       </a>
+      <a class="qcard" href="/3zbawyh/public/backup.php">
+        <strong>النسخ الاحتياطي</strong>
+        <div class="muted">إنشاء/استرجاع نسخة قاعدة البيانات</div>
+      </a>
       <a class="qcard" href="/3zbawyh/public/users.php">
         <strong>إدارة المستخدمين</strong>
         <div class="muted">لإدارة المستخدمين والمحاسبين</div>

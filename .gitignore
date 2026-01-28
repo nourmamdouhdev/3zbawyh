@@ -1,0 +1,3 @@
+# Backups and database dumps
+/uploads/backups/
+*.sql
