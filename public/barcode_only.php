@@ -3,11 +3,6 @@ require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/helpers.php';
 
 require_login();
-
-/**
- * صلاحيات دخول الصفحة (عدّلها براحتك)
- * لو عايز الكاشير يدخل كمان: ضيف 'cashier'
- */
 require_role_in_or_redirect(['admin','Manger','owner']);
 
 $db = db();
@@ -21,508 +16,397 @@ function has_col(PDO $db,$t,$c){
 if(!table_exists($db,'items')){ die('جدول items غير موجود.'); }
 $hasSKU = has_col($db,'items','sku');
 
-// ===== AJAX: search by name only =====
+/* ===== AJAX search ===== */
 if(($_GET['ajax'] ?? '') === 'search'){
   header('Content-Type: application/json; charset=utf-8');
-  $q = trim((string)($_GET['q'] ?? ''));
-  if($q === ''){
-    echo json_encode(['ok'=>true,'items'=>[]]); exit;
-  }
+  $q = trim($_GET['q'] ?? '');
+  if($q===''){ echo json_encode(['ok'=>true,'items'=>[]]); exit; }
 
-  // بحث بالاسم فقط
-  $st = $db->prepare("
-    SELECT id, name, ".($hasSKU ? "sku" : "NULL AS sku")."
-    FROM items
-    WHERE name LIKE ?
-    ORDER BY name
-    LIMIT 60
+  $st=$db->prepare("
+    SELECT id,name,".($hasSKU?"sku":"NULL AS sku")."
+    FROM items WHERE name LIKE ? LIMIT 60
   ");
   $st->execute(['%'.$q.'%']);
   echo json_encode(['ok'=>true,'items'=>$st->fetchAll(PDO::FETCH_ASSOC)]);
   exit;
 }
 
-// ===== AJAX: get one item =====
-if(($_GET['ajax'] ?? '') === 'get_item'){
-  header('Content-Type: application/json; charset=utf-8');
-  $id = (int)($_GET['id'] ?? 0);
-  if($id <= 0){ echo json_encode(['ok'=>false,'error'=>'invalid id']); exit; }
-
-  $st = $db->prepare("
-    SELECT id, name, ".($hasSKU ? "sku" : "NULL AS sku")."
-    FROM items
-    WHERE id=?
-    LIMIT 1
-  ");
-  $st->execute([$id]);
-  $row = $st->fetch(PDO::FETCH_ASSOC);
-
-  if(!$row){ echo json_encode(['ok'=>false,'error'=>'not found']); exit; }
-  echo json_encode(['ok'=>true,'item'=>$row]);
-  exit;
-}
-
-// ===== Big Menu items (أول شاشة) =====
-// هنا اخترت أحدث 120 صنف عشان تكون منيو كبيرة (تقدر تغيّرها ORDER BY name لو تحب)
-$menu = $db->query("
-  SELECT id, name, ".($hasSKU ? "sku" : "NULL AS sku")."
-  FROM items
-  ORDER BY id DESC
-  LIMIT 120
+/* ===== Menu ===== */
+$menu=$db->query("
+  SELECT id,name,".($hasSKU?"sku":"NULL AS sku")."
+  FROM items ORDER BY id DESC LIMIT 120
 ")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>طباعة باركود فقط</title>
-<link rel="stylesheet" href="/3zbawyh/assets/style.css">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>طباعة ليبل China Post 40×30</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
 <style>
-  :root{ --bg:#f7f8fb; --card:#fff; --ink:#111; --muted:#667; --bd:#e8e8ef; --pri:#2261ee; }
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0}
-  body{
-    background: radial-gradient(1200px 600px at 50% -200px, #eef3ff, #f6f7fb);
-    color:var(--ink);
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Kufi Arabic", "Cairo", sans-serif;
-    line-height:1.55;
+:root{
+  --label-w:1.57in; /* 40mm */
+  --label-h:1.18in; /* 30mm */
+  --pri:#ff7a1a;
+  --pri-2:#1c4ed8;
+  --bg:#f7f3ea;
+  --card:#ffffff;
+  --ink:#141414;
+  --muted:#6b6b7a;
+  --bd:#e8e3da;
+  --shadow:0 14px 40px rgba(18,28,45,.08);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:"Tajawal","Noto Kufi Arabic","Cairo",sans-serif;
+  background:
+    radial-gradient(700px 380px at 80% -10%, #ffe3c2 0%, transparent 60%),
+    radial-gradient(700px 380px at -10% 10%, #d8e5ff 0%, transparent 55%),
+    var(--bg);
+  color:var(--ink);
+  min-height:100vh;
+  position:relative;
+  overflow-x:hidden;
+}
+.container{
+  max-width:1100px;
+  margin:24px auto;
+  padding:0 16px 28px;
+  display:grid;
+  grid-template-columns:1.1fr .9fr;
+  grid-template-areas:
+    "topbar topbar"
+    "controls controls"
+    "preview list";
+  gap:12px;
+}
+@media (max-width:900px){
+  .container{
+    grid-template-columns:1fr;
+    grid-template-areas:
+      "topbar"
+      "controls"
+      "preview"
+      "list";
   }
-  .container{max-width:1100px;margin:18px auto;padding:0 14px}
+}
 
-  .topbar{
-    display:flex; gap:10px; align-items:center; justify-content:space-between;
-    margin-bottom:12px;
-  }
-  .title{margin:0;font-size:20px}
-  .btn{
-    border:0;background:var(--pri);color:#fff;
-    padding:10px 14px;border-radius:12px;cursor:pointer;font-weight:700;
-    transition:transform .15s,opacity .15s,box-shadow .15s;
-    box-shadow:0 6px 16px rgba(34,97,238,.18);
-    text-decoration:none; display:inline-flex; align-items:center; gap:8px;
-  }
-  .btn:hover{ transform: translateY(-1px); }
-  .btn.secondary{ background:#eef3fb; color:#0b4ea9; box-shadow:none; }
-  .card{
-    background:var(--card);
-    border:1px solid var(--bd);
-    border-radius:14px;
-    box-shadow:0 8px 24px rgba(0,0,0,.06);
-    padding:14px;
-    margin-block:12px;
-  }
-  .input{
-    width:100%;
-    border:1px solid var(--bd);
-    background:#fff; color:var(--ink);
-    border-radius:12px; padding:12px 12px; outline:0;
-    transition:border-color .15s, box-shadow .15s;
-    font-size:16px;
-  }
-  .input:focus{
-    border-color:#cfe2ff;
-    box-shadow:0 0 0 3px #cfe2ff55;
-  }
+.btn{
+  background:var(--pri);
+  color:#111;
+  border:0;
+  padding:10px 14px;
+  border-radius:12px;
+  cursor:pointer;
+  font-weight:800;
+  transition:transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+  box-shadow:0 10px 24px rgba(255,122,26,.25);
+}
+.btn:disabled{opacity:.5}
+.btn:hover{transform:translateY(-1px)}
+.btn.secondary{
+  background:#fff;
+  color:var(--pri-2);
+  border:1px solid #d9e3ff;
+  box-shadow:none;
+}
+.btn.ghost{
+  background:transparent;
+  color:var(--ink);
+  border:1px solid var(--bd);
+  box-shadow:none;
+}
 
-  .grid{
-    display:grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap:10px;
-  }
-  .item-btn{
-    width:100%;
-    border:1px solid var(--bd);
+.card{
+  background:var(--card);
+  border:1px solid var(--bd);
+  border-radius:16px;
+  padding:14px;
+  box-shadow:var(--shadow);
+  animation:fadeUp .35s ease;
+}
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(6px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+.topbar{grid-area:topbar;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.title{font-size:28px;margin:0;font-weight:900;letter-spacing:.2px}
+.subtitle{color:var(--muted);font-size:13px;margin-top:4px}
+
+.controls{grid-area:controls;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.search{flex:1 1 260px}
+.search label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+.search input{
+  width:100%;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--bd);
+  background:#fff;
+  outline:0;
+  transition:border-color .15s ease, box-shadow .15s ease;
+}
+.search input:focus{
+  border-color:#ffd3b0;
+  box-shadow:0 0 0 3px rgba(255,122,26,.15);
+}
+.chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:8px 10px;
+  border-radius:999px;
+  background:#fff2e6;
+  color:#a14500;
+  font-size:12px;
+  font-weight:800;
+  border:1px solid #ffd3b0;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:8px;
+  max-height:520px;
+  overflow:auto;
+  padding-right:4px;
+}
+.item-btn{
+  padding:12px;
+  border:1px solid var(--bd);
+  background:#fff;
+  border-radius:12px;
+  cursor:pointer;
+  font-weight:800;
+  text-align:right;
+  transition:border-color .12s ease, box-shadow .12s ease, transform .12s ease;
+}
+.item-btn:hover{transform:translateY(-1px)}
+.item-btn.active{
+  border-color:#9bb7ff;
+  box-shadow:0 0 0 3px rgba(28,78,216,.12);
+}
+.item-btn small{color:var(--muted)}
+
+.preview-card{grid-area:preview;display:flex;flex-direction:column;gap:10px}
+.preview-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.eyebrow{font-size:12px;color:var(--muted);font-weight:700}
+.size-pill{
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:800;
+  color:#1847d0;
+  background:#e7efff;
+  border:1px solid #cfe0ff;
+}
+.list-card{grid-area:list}
+.list-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-weight:800}
+.muted{color:var(--muted);font-size:12px}
+.empty-state{
+  display:none;
+  text-align:center;
+  color:var(--muted);
+  border:1px dashed var(--bd);
+  border-radius:12px;
+  padding:14px;
+  margin-top:8px;
+}
+
+/* ===== LABEL PREVIEW ===== */
+.label-preview{
+  border:1px dashed #cfd3de;
+  border-radius:14px;
+  padding:12px;
+  text-align:center;
+  background:linear-gradient(180deg,#ffffff 0%,#f9f9ff 100%);
+  min-height:220px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+}
+.label-preview svg{
+  width:100%;
+  height:auto;
+  max-width:420px;
+}
+.label-code{
+  margin-top:6px;
+  font-size:18px;
+  font-weight:900;
+  direction:ltr;
+  letter-spacing:.6px;
+}
+.label-name{
+  margin-top:6px;
+  font-size:14px;
+  font-weight:700;
+  color:var(--muted);
+}
+
+/* ===== PRINT (40?30mm) ===== */
+@media print{
+  @page{ size:var(--label-w) var(--label-h); margin:0 }
+  html,body{
+    width:var(--label-w);
+    height:var(--label-h);
+    margin:0;
     background:#fff;
-    border-radius:14px;
-    padding:14px 12px;
-    cursor:pointer;
-    text-align:right;
-    font-weight:800;
-    transition:transform .12s, box-shadow .12s, border-color .12s;
-    box-shadow:0 6px 18px rgba(0,0,0,.05);
   }
-  .item-btn:hover{
-    transform: translateY(-1px);
-    border-color:#cfe2ff;
-    box-shadow:0 10px 22px rgba(0,0,0,.07);
-  }
-  .item-sub{
-    display:block;
-    margin-top:6px;
-    font-weight:600;
-    font-size:12px;
-    color:var(--muted);
-  }
-
-  .result-head{
-    display:flex; gap:10px; align-items:center; justify-content:space-between;
-    flex-wrap:wrap;
-  }
-
-  .barcode-area{
-    display:grid;
-    grid-template-columns: 1fr;
-    gap:12px;
-  }
-  @media(min-width:900px){
-    .barcode-area{ grid-template-columns: 1.1fr .9fr; align-items:start; }
-  }
-  .preview{
-    border:1px dashed #d7dbe8;
-    border-radius:14px;
-    padding:12px;
-    background:#fff;
-    text-align:center;
-    min-height:180px;
+  .container>*:not(.print-only){display:none!important}
+  .print-only{
+    width:var(--label-w);
+    height:var(--label-h);
     display:flex;
     align-items:center;
     justify-content:center;
-    flex-direction:column;
-    gap:8px;
-  }
-  .preview svg{ max-width:100%; height:auto; }
-  .muted{ color:var(--muted); font-size:13px; }
-
-  .empty{
-    text-align:center;
-    color:var(--muted);
-    padding:22px 10px;
   }
 
-  :root{
-    --barcode-page-width: 40mm;
-    --barcode-page-height: 30mm;
+  .label-preview{
+    border:0;
+    width:100%;
+    height:100%;
+    padding:0.03in;
+    transform: scale(1.25);
+    transform-origin: top center;
   }
 
-  @media print{
-    @page{ size: var(--barcode-page-width) var(--barcode-page-height); margin: 0; }
-    html, body{ width: var(--barcode-page-width); height: var(--barcode-page-height); }
-    body{ background:#fff; margin:0; }
-    .container > *:not(.print-only){ display:none !important; }
-    .print-only{ box-shadow:none; border:0; }
-    .print-only{ width: var(--barcode-page-width); height: var(--barcode-page-height); margin:0 auto; }
-    .barcode-area{ height:100%; align-content:center; }
-    .preview{ border:0; padding:0; min-height:auto; }
-    .preview svg{ width:100%; height:auto; max-height:22mm; }
-    #previewHint{ display:none !important; }
+  svg{
+    width:100%;
+    height:auto;
+    max-height:0.55in;
   }
+}
 </style>
 </head>
+
 <body>
-
 <div class="container">
+
   <div class="topbar">
-    <h1 class="title">طباعة باركود فقط</h1>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <a class="btn secondary" href="/3zbawyh/public/dashboard.php">عودة للوحة</a>
-      <button class="btn secondary" id="clearBtn" type="button">تفريغ</button>
+    <div>
+      <h1 class="title">طباعة الباركود</h1>
+      <div class="subtitle">اختيار سريع للصنف وطباعة ليبل 40×30 مم</div>
     </div>
+    <a class="btn ghost" href="/3zbawyh/public/dashboard.php">رجوع للوحة التحكم</a>
   </div>
 
-  <div class="card">
-    <div class="result-head">
-      <div style="flex:1;min-width:240px">
-        <input class="input" id="q" placeholder="ابحث باسم الصنف فقط...">
-        <div class="muted" style="margin-top:6px">اختار من المنيو أو اكتب اسم الصنف.</div>
-      </div>
-      <div style="min-width:220px">
-        <button class="btn" type="button" id="printBtn" disabled>طباعة الباركود فقط</button>
-      </div>
+  <div class="card controls">
+    <div class="search">
+      <label for="q">بحث سريع</label>
+      <input id="q" placeholder="ابحث باسم الصنف أو SKU..." autocomplete="off">
     </div>
+    <button class="btn" id="printBtn" disabled>طباعة الليبل</button>
+    <span class="chip" id="selectedSku">SKU: —</span>
   </div>
 
-  <!-- Preview -->
-  <div class="card print-only">
-    <div class="barcode-area">
+  <div class="card print-only preview-card">
+    <div class="preview-head">
       <div>
-        <div style="font-weight:900;font-size:18px;margin-bottom:6px" id="itemName">—</div>
-        <div class="muted">قيمة الباركود (SKU): <span id="itemSku">—</span></div>
-        <div class="muted" style="margin-top:8px">
-          ملاحظة: الصفحة دي بتطبع الباركود فقط (بدون أسعار/تفاصيل تانية) بمقاس 40×30 مم.
-        </div>
+        <div class="eyebrow">معاينة الباركود</div>
+        <div class="muted">جاهز للطباعة 40×30 مم</div>
       </div>
-
-      <div class="preview">
-        <svg id="barcode_preview"></svg>
-        <div class="muted" id="previewHint">اختار صنف عشان يظهر الباركود</div>
-      </div>
+      <div class="size-pill">40×30</div>
+    </div>
+    <div class="label-preview">
+      <svg id="barcode"></svg>
+      <div class="label-code" id="labelCode">—</div>
+      <div class="label-name" id="labelName">—</div>
     </div>
   </div>
 
-  <!-- Search results -->
-  <div class="card" id="searchCard" style="display:none">
-    <div style="font-weight:900;margin-bottom:10px">نتائج البحث</div>
-    <div class="grid" id="searchGrid"></div>
-    <div class="empty" id="searchEmpty" style="display:none">مفيش نتائج</div>
-  </div>
+  <div class="card list-card">
+    <div class="list-head">
+      <div>اختيار الصنف</div>
+      <div class="muted">عدد الأصناف: <?= count($menu) ?></div>
+    </div>
+    <div class="grid" id="menu">
+      <?php foreach($menu as $m): ?>
+        <button class="item-btn"
+          data-name="<?=e($m['name'])?>"
+          data-sku="<?=e($m['sku']??'')?>">
 
-  <!-- Big menu -->
-  <div class="card" id="menuCard">
-    <div style="font-weight:900;margin-bottom:10px">منيو الأصناف</div>
-    <div class="grid" id="menuGrid">
-      <?php foreach($menu as $it): ?>
-        <button class="item-btn" type="button"
-          data-id="<?=$it['id']?>"
-          data-name="<?=e($it['name'])?>"
-          data-sku="<?=e((string)($it['sku'] ?? ''))?>">
-          <?=e($it['name'])?>
-          <span class="item-sub"><?= $hasSKU ? ('SKU: '.e((string)($it['sku'] ?? '—'))) : 'SKU غير مفعّل' ?></span>
+          <?=e($m['name'])?><br>
+          <small><?= $hasSKU?'SKU: '.e($m['sku']??'—'):'SKU غير مفعّل' ?></small>
         </button>
-      <?php endforeach; ?>
+      <?php endforeach ?>
     </div>
+    <div class="empty-state" id="emptyState">لا توجد نتائج مطابقة</div>
   </div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
 <script>
-const hasSKU = <?= json_encode($hasSKU) ?>;
-
-const q = document.getElementById('q');
-const menuCard = document.getElementById('menuCard');
-const menuGrid = document.getElementById('menuGrid');
-
-const searchCard = document.getElementById('searchCard');
-const searchGrid = document.getElementById('searchGrid');
-const searchEmpty = document.getElementById('searchEmpty');
-
-const itemName = document.getElementById('itemName');
-const itemSku  = document.getElementById('itemSku');
+const menu = document.getElementById('menu');
+const barcode = document.getElementById('barcode');
 const printBtn = document.getElementById('printBtn');
+const labelCode = document.getElementById('labelCode');
+const labelName = document.getElementById('labelName');
+const searchInput = document.getElementById('q');
+const selectedSku = document.getElementById('selectedSku');
+const emptyState = document.getElementById('emptyState');
+const menuButtons = menu ? Array.from(menu.querySelectorAll('.item-btn')) : [];
 
-const barcodePreview = document.getElementById('barcode_preview');
-const previewHint = document.getElementById('previewHint');
+let currentSKU = '', currentName = '';
 
-let currentSKU = '';
-let currentName = '';
-let isPrinting = false;
-const LABEL_WIDTH_MM = 40;
-const LABEL_HEIGHT_MM = 30;
+function draw(code){
+  if(!code){ barcode.innerHTML=''; return; }
 
-function renderBarcode(val){
-  if(!barcodePreview) return;
-  if(!val){
-    barcodePreview.innerHTML = '';
-    return;
-  }
-  if(window.JsBarcode){
-    window.JsBarcode(barcodePreview, val, {
-      format: 'CODE128',
-      lineColor: '#111',
-      width: 1.5,
-      height: 50,
-      displayValue: true,
-      fontSize: 14,
-      margin: 6
-    });
-  }
-}
-
-function selectItem(name, sku){
-  currentName = name || '';
-  currentSKU  = (sku || '').trim();
-
-  itemName.textContent = currentName || '—';
-  itemSku.textContent  = currentSKU || '—';
-
-  if(!hasSKU){
-    renderBarcode('');
-    previewHint.textContent = 'SKU غير مفعّل في جدول items';
-    printBtn.disabled = true;
-    return;
-  }
-
-  if(!currentSKU){
-    renderBarcode('');
-    previewHint.textContent = 'الصنف ده ملوش SKU';
-    printBtn.disabled = true;
-    return;
-  }
-
-  previewHint.textContent = '';
-  renderBarcode(currentSKU);
-  printBtn.disabled = false;
-}
-
-async function getItem(id){
-  const res = await fetch(`?ajax=get_item&id=${encodeURIComponent(id)}`);
-  const data = await res.json();
-  if(data && data.ok && data.item){
-    selectItem(data.item.name, data.item.sku);
-  }
-}
-
-function makeBtn(it){
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'item-btn';
-  b.innerHTML = `
-    ${escapeHtml(it.name)}
-    <span class="item-sub">${hasSKU ? ('SKU: ' + escapeHtml(it.sku || '—')) : 'SKU غير مفعّل'}</span>
-  `;
-  b.addEventListener('click', ()=> selectItem(it.name, it.sku || ''));
-  return b;
-}
-
-function escapeHtml(s){
-  return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-}
-
-let t = null;
-q.addEventListener('input', ()=>{
-  clearTimeout(t);
-  t = setTimeout(runSearch, 220);
-});
-
-async function runSearch(){
-  const term = (q.value || '').trim();
-
-  if(term.length === 0){
-    searchCard.style.display = 'none';
-    menuCard.style.display = 'block';
-    searchGrid.innerHTML = '';
-    searchEmpty.style.display = 'none';
-    return;
-  }
-
-  menuCard.style.display = 'none';
-  searchCard.style.display = 'block';
-  searchGrid.innerHTML = '';
-  searchEmpty.style.display = 'none';
-
-  try{
-    const res = await fetch(`?ajax=search&q=${encodeURIComponent(term)}`);
-    const data = await res.json();
-    const items = (data && data.ok && Array.isArray(data.items)) ? data.items : [];
-
-    if(items.length === 0){
-      searchEmpty.style.display = 'block';
-      return;
-    }
-
-    items.forEach(it => searchGrid.appendChild(makeBtn(it)));
-  }catch(e){
-    searchEmpty.style.display = 'block';
-    searchEmpty.textContent = 'حصل خطأ في البحث';
-  }
-}
-
-// menu click (fast select)
-menuGrid.addEventListener('click', (e)=>{
-  const btn = e.target.closest('.item-btn');
-  if(!btn) return;
-  selectItem(btn.dataset.name || '', btn.dataset.sku || '');
-});
-
-document.getElementById('clearBtn').addEventListener('click', ()=>{
-  q.value = '';
-  searchCard.style.display = 'none';
-  menuCard.style.display = 'block';
-  searchGrid.innerHTML = '';
-  searchEmpty.style.display = 'none';
-  selectItem('', '');
-});
-
-function mmToIn(mm){ return mm / 25.4; }
-
-function svgToPngBase64(svgEl, widthMm, heightMm, dpi = 300){
-  return new Promise((resolve, reject) => {
-    const serializer = new XMLSerializer();
-    const svgString = serializer.serializeToString(svgEl);
-    const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
-    const img = new Image();
-    img.onload = () => {
-      const pxW = Math.round(mmToIn(widthMm) * dpi);
-      const pxH = Math.round(mmToIn(heightMm) * dpi);
-      const canvas = document.createElement('canvas');
-      canvas.width = pxW;
-      canvas.height = pxH;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return reject(new Error('Canvas context unavailable'));
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, pxW, pxH);
-      const scale = Math.min(pxW / img.width, pxH / img.height);
-      const w = img.width * scale;
-      const h = img.height * scale;
-      const x = (pxW - w) / 2;
-      const y = (pxH - h) / 2;
-      const px = Math.round(sizeInInches * dpi);
-      const canvas = document.createElement('canvas');
-      canvas.width = px;
-      canvas.height = px;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return reject(new Error('Canvas context unavailable'));
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, px, px);
-      const scale = Math.min(px / img.width, px / img.height);
-      const w = img.width * scale;
-      const h = img.height * scale;
-      const x = (px - w) / 2;
-      const y = (px - h) / 2;
-      ctx.drawImage(img, x, y, w, h);
-      const dataUrl = canvas.toDataURL('image/png');
-      resolve(dataUrl.split(',')[1]);
-    };
-    img.onerror = reject;
-    img.src = svgDataUrl;
+  JsBarcode(barcode, code.toUpperCase(), {
+    format:'CODE39',
+    width:2.1,
+    height:60,
+    displayValue:false,
+    margin:0
   });
 }
 
-async function tryQzPrint(svgEl){
-  if (!window.qz) return false;
-  try{
-    if (!qz.websocket.isActive()) {
-      await qz.websocket.connect();
-    }
-    let printer = null;
-    try{
-      printer = await qz.printers.find('XP-233B');
-    }catch(e){}
-    if (!printer) {
-      printer = await qz.printers.getDefault();
-    }
-    if (!printer) throw new Error('No default printer');
-    const config = qz.configs.create(printer, {
-      size: { width: LABEL_WIDTH_MM, height: LABEL_HEIGHT_MM, unit: 'mm' },
-      scaleContent: true,
-      copies: 1
-    });
-    const pngBase64 = await svgToPngBase64(svgEl, LABEL_WIDTH_MM, LABEL_HEIGHT_MM);
-    await qz.print(config, [{ type: 'image', format: 'base64', data: pngBase64 }]);
-    return true;
-  }catch(e){
-    console.warn('QZ print failed, falling back to browser print.', e);
-    return false;
+function updateLabels(){
+  labelCode.textContent = currentSKU || '—';
+  labelName.textContent = currentName || '—';
+  if(selectedSku){
+    selectedSku.textContent = currentSKU ? `SKU: ${currentSKU}` : 'SKU: —';
   }
+  printBtn.disabled = !currentSKU;
 }
 
-async function printBarcodeOnly(){
-  if(!currentSKU) return;
-  if (isPrinting) return;
-  isPrinting = true;
-  if (printBtn) printBtn.disabled = true;
-
-  renderBarcode(currentSKU);
-  const svg = document.getElementById('barcode_preview');
-  if(!svg) {
-    isPrinting = false;
-    if (printBtn) printBtn.disabled = false;
-    return;
-  }
-
-  const printed = await tryQzPrint(svg);
-  if(!printed){
-    window.print();
-  }
-  isPrinting = false;
-  if (printBtn) printBtn.disabled = false;
+function setActive(btn){
+  menuButtons.forEach(b => b.classList.toggle('active', b === btn));
 }
 
-printBtn.addEventListener('click', ()=> { void printBarcodeOnly(); });
+function filterMenu(){
+  const q = (searchInput?.value || '').trim().toLowerCase();
+  let visible = 0;
+  menuButtons.forEach(b => {
+    const hay = (b.dataset.name + ' ' + (b.dataset.sku || '')).toLowerCase();
+    const show = !q || hay.includes(q);
+    b.style.display = show ? '' : 'none';
+    if(show) visible++;
+  });
+  if(emptyState) emptyState.style.display = visible ? 'none' : 'block';
+}
 
-// init
-selectItem('', '');
+menu.addEventListener('click', e => {
+  const b = e.target.closest('.item-btn');
+  if(!b) return;
+  currentSKU = b.dataset.sku || '';
+  currentName = b.dataset.name || '';
+  draw(currentSKU);
+  updateLabels();
+  setActive(b);
+});
+
+if(searchInput) searchInput.addEventListener('input', filterMenu);
+filterMenu();
+updateLabels();
+printBtn.onclick = () => window.print();
 </script>
 </body>
 </html>

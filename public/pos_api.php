@@ -521,6 +521,25 @@ if ($q !== '') {
         ];
       }, $cart);
 
+      // ✅ حد الخصم حسب الدور (نسبة مئوية من الإجمالي قبل الخصم)
+      $role = strtolower($u['role'] ?? '');
+      $maxDiscPercent = null;
+      if ($role === 'cashier' || $role === 'chasier') {
+        $maxDiscPercent = 20;
+      } elseif ($role === 'manger' || $role === 'manager') {
+        $maxDiscPercent = 30;
+      }
+      if ($maxDiscPercent !== null) {
+        $subtotalTmp = 0.0;
+        foreach ($lines as $ln) {
+          $subtotalTmp += (float)$ln['qty'] * (float)$ln['unit_price'];
+        }
+        $maxDiscAmount = $subtotalTmp * ($maxDiscPercent / 100);
+        if ($discount - $maxDiscAmount > 0.01) {
+          throw new Exception('الخصم أكبر من الحد المسموح به للدور الحالي.');
+        }
+      }
+
       $total      = calc_total_from_lines($lines, $discount, $tax);
       $change_due = validate_payments_rules($pays, $total);
 

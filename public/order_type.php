@@ -17,7 +17,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ✅ سعر عادي (فاتورة باسم عميل) - لازم بيانات كاملة ومفيش تخطي
     $_SESSION['pos_sale_type'] = 'normal';
 
+    $_SESSION['pos_flow']['customer_name'] = '';
+    $_SESSION['pos_flow']['customer_phone'] = '';
     $_SESSION['pos_flow']['customer_skipped'] = false;
+    $_SESSION['pos_flow']['category_id'] = null;
+    $_SESSION['pos_flow']['subcategory_id'] = null;
+    $_SESSION['pos_flow']['sub_subcategory_id'] = null;
     header('Location: /3zbawyh/public/customer_name.php?mode=invoice');
     exit;
 
@@ -27,10 +32,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $_SESSION['pos_sale_type'] = 'wholesale';
 
     // هنسيب الاسم والموبايل يتحددوا في صفحة customer_name.php
-    unset($_SESSION['pos_flow']['customer_name'], $_SESSION['pos_flow']['customer_phone']);
-    $_SESSION['pos_flow']['customer_skipped'] = false;
+    $_SESSION['pos_flow']['customer_name'] = '';
+    $_SESSION['pos_flow']['customer_phone'] = '';
+    $_SESSION['pos_flow']['customer_skipped'] = true;
+    $_SESSION['pos_flow']['category_id'] = null;
+    $_SESSION['pos_flow']['subcategory_id'] = null;
+    $_SESSION['pos_flow']['sub_subcategory_id'] = null;
 
-    header('Location: /3zbawyh/public/customer_name.php?mode=retail');
+    header('Location: /3zbawyh/public/select_items.php?all=1');
     exit;
   }
 }

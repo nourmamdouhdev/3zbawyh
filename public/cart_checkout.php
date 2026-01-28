@@ -11,6 +11,13 @@ $__customer_phone   = $_SESSION['pos_flow']['customer_phone']   ?? '';
 $__customer_skipped = $_SESSION['pos_flow']['customer_skipped'] ?? false;
 
 $u = current_user();
+$role = strtolower($u['role'] ?? '');
+$max_disc_percent = null;
+if ($role === 'cashier' || $role === 'chasier') {
+  $max_disc_percent = 20;
+} elseif ($role === 'manger' || $role === 'manager') {
+  $max_disc_percent = 30;
+}
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -178,7 +185,7 @@ body{
       <span class="badge">Cart Checkout</span>
     </div>
     <div class="actions">
-      <a class="btn secondary" href="/3zbawyh/public/select_category.php">+ أضف أصناف</a>
+      <a class="btn secondary" href="/3zbawyh/public/select_items.php?all=1">+ أضف أصناف</a>
       <a class="btn secondary" href="/3zbawyh/public/customer_name.php">تعديل العميل</a>
       <a href="/3zbawyh/public/logout.php" class="muted">خروج (<?=e($u['username'])?>)</a>
     </div>
@@ -224,9 +231,16 @@ body{
 
       <div class="inputs">
         <label class="muted" style="font-size:13px">
-          خصم
+          خصم (%)
           <input id="discount" class="input" value="0" inputmode="decimal" style="width:100%;margin-top:6px">
         </label>
+        <div id="discountHint" class="muted" style="font-size:12px;margin-top:-4px">
+          <?php if ($max_disc_percent !== null): ?>
+            الحد الأقصى للخصم: <?= (int)$max_disc_percent ?>%
+          <?php else: ?>
+            بدون حد أقصى للخصم
+          <?php endif; ?>
+        </div>
         <label class="muted" style="font-size:13px">
           ضريبة
           <input id="tax" class="input" value="0" inputmode="decimal" style="width:100%;margin-top:6px">
@@ -257,6 +271,7 @@ body{
 // ============ قيم العميل من الـPHP (من الـSession) ============
 const CUSTOMER_NAME  = <?= json_encode($__customer_name, JSON_UNESCAPED_UNICODE) ?>;
 const CUSTOMER_PHONE = <?= json_encode($__customer_phone, JSON_UNESCAPED_UNICODE) ?>;
+const MAX_DISC_PERCENT = <?= $max_disc_percent === null ? 'null' : (int)$max_disc_percent ?>;
 
 const el  = s=>document.querySelector(s);
 const fmt = n=>{ n=parseFloat(n||0); return isNaN(n)?'0.00':n.toFixed(2); };
@@ -274,6 +289,8 @@ function apiPost(action, body={}){
 }
 
 let CART = [];
+let LAST_SUBTOTAL = 0;
+let LAST_DISCOUNT_AMOUNT = 0;
 function loadCart(){
   api('cart_get').then(r=>{
     if(!r.ok){ alert(r.error||'خطأ'); return; }
@@ -332,9 +349,18 @@ function renderCart(){
 function refreshTotals(){
   let subtotal=0;
   CART.forEach(l=> subtotal += (+l.qty)*(+l.unit_price) );
-  const disc = +el('#discount').value||0;
+  let discPercent = +el('#discount').value||0;
+  if (discPercent < 0) discPercent = 0;
+  if (discPercent > 100) discPercent = 100;
+  if (MAX_DISC_PERCENT !== null && discPercent > MAX_DISC_PERCENT) {
+    discPercent = MAX_DISC_PERCENT;
+  }
+  el('#discount').value = discPercent.toString();
+  const discAmount = subtotal * (discPercent / 100);
   const tx   = +el('#tax').value||0;
-  el('#grand').textContent = fmt(subtotal - disc + tx);
+  LAST_SUBTOTAL = subtotal;
+  LAST_DISCOUNT_AMOUNT = discAmount;
+  el('#grand').textContent = fmt(subtotal - discAmount + tx);
   sumPayments();
 }
 el('#discount').addEventListener('input', refreshTotals);
@@ -473,7 +499,7 @@ el('#finish').onclick = ()=>{
   }
 
   apiPost('cart_checkout_multi_legacy', {
-    discount: +el('#discount').value||0,
+    discount: LAST_DISCOUNT_AMOUNT || 0,
     tax: +el('#tax').value||0,
     payments: pays,
     customer_name:  CUSTOMER_NAME || '',

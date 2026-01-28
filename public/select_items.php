@@ -13,20 +13,24 @@ $__sale_type = $_SESSION['pos_sale_type'] ?? 'normal';
 
 require_role_in_or_redirect(['admin','cashier','Manger']);
 
-if (empty($_SESSION['pos_flow']['category_id'])) {
-  header('Location: /3zbawyh/public/select_category.php'); exit;
-}
-if (empty($_SESSION['pos_flow']['subcategory_id'])) {
-  header('Location: /3zbawyh/public/select_subcategory.php'); exit;
-}
-if (empty($_SESSION['pos_flow']['sub_subcategory_id'])) {
-  // لو حابب تخلي sub-sub اختياري، شيل السطرين دول
-  header('Location: /3zbawyh/public/select_sub_subcategory.php'); exit;
+$all_items = isset($_GET['all']) && $_GET['all'] !== '' && $_GET['all'] !== '0';
+
+if (!$all_items) {
+  if (empty($_SESSION['pos_flow']['category_id'])) {
+    header('Location: /3zbawyh/public/select_category.php'); exit;
+  }
+  if (empty($_SESSION['pos_flow']['subcategory_id'])) {
+    header('Location: /3zbawyh/public/select_subcategory.php'); exit;
+  }
+  if (empty($_SESSION['pos_flow']['sub_subcategory_id'])) {
+    // لو حابب تخلي sub-sub اختياري، شيل السطرين دول
+    header('Location: /3zbawyh/public/select_sub_subcategory.php'); exit;
+  }
 }
 
-$category_id       = (int)$_SESSION['pos_flow']['category_id'];
-$subcategory_id    = (int)$_SESSION['pos_flow']['subcategory_id'];
-$sub_subcategory_id= (int)$_SESSION['pos_flow']['sub_subcategory_id'];
+$category_id        = $all_items ? 0 : (int)($_SESSION['pos_flow']['category_id'] ?? 0);
+$subcategory_id     = $all_items ? 0 : (int)($_SESSION['pos_flow']['subcategory_id'] ?? 0);
+$sub_subcategory_id = $all_items ? 0 : (int)($_SESSION['pos_flow']['sub_subcategory_id'] ?? 0);
 
 $u = current_user();
 ?>
@@ -216,9 +220,13 @@ a{color:var(--pri)}
 <nav class="nav">
   <div><strong> صفحة الأصناف</strong></div>
   <div class="right">
-    <span class="pill">التصنيف: <span id="catName">#<?=$category_id?></span></span>
-    <span class="pill">الفرعي: <span id="subName">#<?=$subcategory_id?></span></span>
-    <span class="pill">الفرعي الفرعي: <span id="subSubName">#<?=$sub_subcategory_id?></span></span>
+    <?php if(!$all_items): ?>
+      <span class="pill">التصنيف: <span id="catName">#<?=$category_id?></span></span>
+      <span class="pill">الفرعي: <span id="subName">#<?=$subcategory_id?></span></span>
+      <span class="pill">الفرعي الفرعي: <span id="subSubName">#<?=$sub_subcategory_id?></span></span>
+    <?php else: ?>
+      <span class="pill" style="background:#fff8e1;border-color:#ffe0b2;color:#7a4b00">كل الأصناف</span>
+    <?php endif; ?>
 
     <!-- ✅ توضيح نوع السعر الحالي -->
     <span class="pill" style="background:#e8f5e9;border-color:#c8e6c9;color:#1b5e20">
@@ -226,7 +234,9 @@ a{color:var(--pri)}
       <?= $__sale_type === 'wholesale' ? 'قطاعي ' : 'فاتورة عادية' ?>
     </span>
 
-    <a class="btn secondary" href="/3zbawyh/public/select_sub_subcategory.php">← الفرعي الفرعي</a>
+    <?php if(!$all_items): ?>
+      <a class="btn secondary" href="/3zbawyh/public/select_sub_subcategory.php">← الفرعي الفرعي</a>
+    <?php endif; ?>
     <a class="btn" href="/3zbawyh/public/cart_checkout.php" id="cartBtnTop">الكارت (0)</a>
     <a href="/3zbawyh/public/logout.php">خروج (<?=e($u['username'])?>)</a>
   </div>
@@ -246,10 +256,13 @@ a{color:var(--pri)}
   <div class="box">
     <div class="row" style="justify-content:space-between">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input id="q" class="input" placeholder="ابحث باسم الصنف (Enter)">
+        <input id="q" class="input" placeholder="ابحث بالاسم أو الباركود (Enter)">
         <button class="btn" id="btnSearch" type="button">بحث</button>
       </div>
       <div class="pill" id="countHint">— النتائج: 0 عنصر</div>
+    </div>
+    <div class="help" style="margin-top:6px;color:#667;font-size:12px">
+      امسح الباركود ثم اضغط Enter للإضافة السريعة.
     </div>
 
     <div id="itemsGrid" class="list" aria-live="polite"></div>
@@ -269,6 +282,7 @@ const ssid = <?=$sub_subcategory_id?>;
 
 // ✅ نوع السعر في الجافاسكربت
 const SALE_TYPE = <?= json_encode($__sale_type === 'wholesale' ? 'wholesale' : 'normal') ?>;
+const ALL_ITEMS = <?= json_encode($all_items) ?>;
 
 const el = s=>document.querySelector(s);
 const fmt = n=>{ n=parseFloat(n||0); return isNaN(n)?'0.00':n.toFixed(2); };
@@ -308,26 +322,28 @@ function toast({title='تم', msg='', ok=false, timeout=2200}={}){
 }
 
 /* Breadcrumb names */
-api('search_categories').then(r=>{
-  if(r?.ok){
-    const c=(r.categories||[]).find(x=>+x.id===cid);
-    if(c) el('#catName').textContent=c.name;
-  }
-});
-api('search_subcategories',{category_id:cid}).then(r=>{
-  if(r?.ok){
-    const s=(r.subcategories||[]).find(x=>+x.id===sid);
-    if(s) el('#subName').textContent=s.name;
-  }
-});
+if (!ALL_ITEMS) {
+  api('search_categories').then(r=>{
+    if(r?.ok){
+      const c=(r.categories||[]).find(x=>+x.id===cid);
+      if(c) el('#catName').textContent=c.name;
+    }
+  });
+  api('search_subcategories',{category_id:cid}).then(r=>{
+    if(r?.ok){
+      const s=(r.subcategories||[]).find(x=>+x.id===sid);
+      if(s) el('#subName').textContent=s.name;
+    }
+  });
 
-// ✅ اسم sub-sub-category (لازم يكون عندك action اسمه search_sub_subcategories في pos_api)
-api('search_sub_subcategories',{subcategory_id:sid}).then(r=>{
-  if(r?.ok){
-    const s=(r.sub_subcategories||[]).find(x=>+x.id===ssid);
-    if(s) el('#subSubName').textContent=s.name;
-  }
-}).catch(()=>{});
+  // ✅ اسم sub-sub-category (لازم يكون عندك action اسمه search_sub_subcategories في pos_api)
+  api('search_sub_subcategories',{subcategory_id:sid}).then(r=>{
+    if(r?.ok){
+      const s=(r.sub_subcategories||[]).find(x=>+x.id===ssid);
+      if(s) el('#subSubName').textContent=s.name;
+    }
+  }).catch(()=>{});
+}
 
 /* Img field */
 function getItemImage(it){ return it.image_url || it.photo || it.image || ''; }
@@ -351,7 +367,7 @@ function renderItems(items){
   const grid = el('#itemsGrid'); grid.innerHTML='';
   el('#countHint').textContent = '— النتائج: ' + (items?.length || 0) + ' عنصر';
   if (!items?.length){
-    grid.innerHTML = `<div style="grid-column:1/-1;padding:16px;color:#666">لا توجد نتائج ضمن هذا الفرعي.</div>`;
+    grid.innerHTML = `<div style="grid-column:1/-1;padding:16px;color:#666">${ALL_ITEMS ? 'لا توجد نتائج.' : 'لا توجد نتائج ضمن هذا الفرعي.'}</div>`;
     return;
   }
   items.forEach(it=>{
@@ -428,17 +444,19 @@ function renderItems(items){
       const id = +btn.dataset.id;
       const qtyBox = btn.closest('.actions').querySelector('.qty .val');
       const qty = Math.max(1, parseInt(qtyBox?.value || '1', 10));
-      addToCart(id, qty, btn);
+      const name = btn.closest('.card')?.querySelector('.name')?.textContent?.trim() || '';
+      addToCart(id, qty, btn, name);
     });
   });
 }
 
-function addToCart(id, qty, btnEl){
+function addToCart(id, qty, btnEl, itemName=''){
   // ✅ مش محتاج نبعت نوع السعر، الـ API بياخده من الـ Session
   postForm('cart_add', {item_id:id, qty:qty}).then(res=>{
     if(!res.ok){ alert(res.error||'خطأ'); return; }
     refreshCartCount();
-    toast({ok:true, title:'تمت الإضافة', msg:`أُضيف (${qty}) × صنف #${id} إلى العربة.`});
+    const label = itemName ? ` — ${itemName}` : '';
+    toast({ok:true, title:'تمت الإضافة', msg:`أُضيف (${qty}) × صنف #${id}${label} إلى العربة.`});
     const qInput = document.getElementById('q');
 qInput.value = '';
 qInput.focus();
@@ -450,16 +468,30 @@ qInput.focus();
   });
 }
 
-function searchItems(){
+function searchItems(autoAdd=false){
   const q = el('#q').value.trim();
-  api('search_items',{
-    q,
-    category_id: cid,
-    subcategory_id: sid,
-    sub_subcategory_id: ssid    // ✅ عشان يتفلتر بالفرعي الفرعي كمان
-  }).then(r=>{
+  const params = { q };
+  if (!ALL_ITEMS) {
+    params.category_id = cid;
+    params.subcategory_id = sid;
+    params.sub_subcategory_id = ssid; // ✅ عشان يتفلتر بالفرعي الفرعي كمان
+  }
+  api('search_items', params).then(r=>{
     if(!r.ok){ alert(r.error||'خطأ'); return; }
-    renderItems(r.items||[]);
+    const items = r.items || [];
+    renderItems(items);
+
+    if (autoAdd && q) {
+      const qNorm = q.toString().trim().toLowerCase();
+      let match = items.find(it => (it.sku || '').toString().trim().toLowerCase() === qNorm);
+      if (!match && /^\d+$/.test(qNorm)) {
+        const qNum = parseInt(qNorm, 10);
+        match = items.find(it => +it.id === qNum);
+      }
+      if (match) {
+        addToCart(match.id, 1, null, match.name || '');
+      }
+    }
   });
 }
 
@@ -483,7 +515,7 @@ window.addEventListener('load', () => {
 });
 
 /* بحث بالزر و Enter */
-document.getElementById('btnSearch').addEventListener('click', searchItems);
+document.getElementById('btnSearch').addEventListener('click', () => searchItems(false));
 const qInput = document.getElementById('q');
 
 qInput.addEventListener('keydown', e => {
@@ -493,7 +525,7 @@ qInput.addEventListener('keydown', e => {
     const v = qInput.value.trim();
     if (!v) return;
 
-    searchItems();
+    searchItems(true);
 
     // اختياري: فضي الخانة بعد البحث
     setTimeout(() => {

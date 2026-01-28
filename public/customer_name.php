@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $_SESSION['pos_flow']['customer_phone']   = '';
     $_SESSION['pos_flow']['customer_skipped'] = true;
 
-    header('Location: /3zbawyh/public/select_category.php'); 
+    header('Location: /3zbawyh/public/select_items.php?all=1'); 
     exit;
   }
 
@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['pos_flow']['customer_name']    = $name;
         $_SESSION['pos_flow']['customer_phone']   = $phone;
         $_SESSION['pos_flow']['customer_skipped'] = false;
-        header('Location: /3zbawyh/public/select_category.php'); 
+        header('Location: /3zbawyh/public/select_items.php?all=1'); 
         exit;
       }
 
@@ -66,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['pos_flow']['customer_name']    = $name;
         $_SESSION['pos_flow']['customer_phone']   = $phone;
         $_SESSION['pos_flow']['customer_skipped'] = false;
-        header('Location: /3zbawyh/public/select_category.php'); 
+        header('Location: /3zbawyh/public/select_items.php?all=1'); 
         exit;
       }
     }

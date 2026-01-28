@@ -394,7 +394,25 @@ if($cat!==null && $hasCatId){ $where.=" AND i.category_id=?";        $params[]=$
 if($sub!==null && $hasSubcatId){ $where.=" AND i.subcategory_id=?";  $params[]=$sub; }
 if($subsub!==null && $hasSubSubId){ $where.=" AND i.sub_subcategory_id=?"; $params[]=$subsub; }
 
-$sqlList = "SELECT $select FROM items i $join WHERE $where ORDER BY i.id DESC LIMIT 200";
+/** Pagination */
+$perPage = 8;
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+if ($page < 1) { $page = 1; }
+
+$countSql = "SELECT COUNT(*) FROM items i $join WHERE $where";
+$stCount = $db->prepare($countSql);
+$stCount->execute($params);
+$totalItems = (int)($stCount->fetchColumn() ?? 0);
+$totalPages = max(1, (int)ceil($totalItems / $perPage));
+if ($page > $totalPages) { $page = $totalPages; }
+$offset = ($page - 1) * $perPage;
+
+$qs = $_GET;
+unset($qs['page']);
+$queryString = http_build_query($qs);
+$pageBase = $queryString ? '?' . $queryString . '&page=' : '?page=';
+
+$sqlList = "SELECT $select FROM items i $join WHERE $where ORDER BY i.id DESC LIMIT $perPage OFFSET $offset";
 $st=$db->prepare($sqlList); $st->execute($params);
 $list=$st->fetchAll(PDO::FETCH_ASSOC);
 
@@ -414,87 +432,275 @@ if(isset($_GET['edit'])){
 <title>الأصناف</title>
 <link rel="stylesheet" href="/3zbawyh/assets/style.css">
 <style>
-  :root{ --bg:#f7f8fb; --card:#fff; --ink:#111; --muted:#667; --bd:#e8e8ef; }
+@import url('https://fonts.googleapis.com/css2?family=Marhey:wght@600;700&family=Tajawal:wght@400;500;700;800&display=swap');
+  :root{
+    --bg:#f7f3ee;
+    --bg-2:#eef6f4;
+    --card:#fff;
+    --ink:#1f2937;
+    --muted:#6b7280;
+    --bd:#e5e7eb;
+    --accent:#0ea5a4;
+    --accent-dark:#0f766e;
+    --accent-2:#f59e0b;
+    --danger:#b91c1c;
+    --shadow:0 10px 24px rgba(15,23,42,.08);
+  }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
   body{
-    background: radial-gradient(1200px 600px at 50% -200px, #eef3ff, #f6f7fb);
+    background:
+      radial-gradient(820px 520px at 105% -10%, rgba(14,165,164,.18), transparent 70%),
+      radial-gradient(700px 420px at -10% 10%, rgba(245,158,11,.16), transparent 65%),
+      linear-gradient(180deg, var(--bg), var(--bg-2));
     color: var(--ink);
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Kufi Arabic", "Cairo", sans-serif;
-    line-height:1.55;
+    font-family: sans-serif;
+    line-height:1.65;
+    min-height:100vh;
   }
-  .container{max-width:1100px;margin:18px auto;padding:0 14px}
+  body::before,
+  body::after{
+    content:"";
+    position:fixed;
+    z-index:-1;
+    border-radius:50%;
+    opacity:.6;
+  }
+  body::before{
+    width:380px;height:380px;
+    background:radial-gradient(circle, rgba(14,165,164,.22), transparent 70%);
+    top:-160px; right:-120px;
+  }
+  body::after{
+    width:320px;height:320px;
+    background:radial-gradient(circle, rgba(245,158,11,.22), transparent 70%);
+    bottom:-160px; left:-140px;
+  }
+  .container{max-width:1200px;margin:22px auto 48px;padding:0 18px}
+
+  .page-head{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:16px;
+    padding:18px 18px 14px;
+    background:var(--card);
+    border:1px solid var(--bd);
+    border-radius:20px;
+    box-shadow:var(--shadow);
+    animation:riseIn .5s ease both;
+  }
+  .page-title .eyebrow{
+    font-size:12px;
+    color:var(--muted);
+    letter-spacing:.08em;
+  }
+  .page-title h1{
+    margin:6px 0 8px;
+    font-size:28px;
+    font-family:sans-serif;
+  }
+  .page-meta{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .chip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:6px 10px;
+    border-radius:999px;
+    border:1px solid #f0e3c8;
+    background:#fff7ed;
+    color:#7c2d12;
+    font-size:12px;
+    font-weight:600;
+  }
+  .page-actions{ display:flex; gap:8px; flex-wrap:wrap; }
 
   .card{
     background:var(--card);
     border:1px solid var(--bd);
-    border-radius:14px;
-    box-shadow:0 8px 24px rgba(0,0,0,.06);
-    padding:14px;
+    border-radius:18px;
+    box-shadow:var(--shadow);
+    padding:16px;
     margin-block:12px;
+  }
+  .card-animate{ animation:riseIn .5s ease both; }
+  .card-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:10px;
+  }
+  .card-title h3{
+    margin:0;
+    font-size:18px;
+    font-family:"Marhey","Tajawal",sans-serif;
+  }
+  .card-title p{
+    margin:4px 0 0;
+    font-size:13px;
+    color:var(--muted);
   }
 
   .btn{
-    border:0;background:#2261ee;color:#fff;
-    padding:10px 14px;border-radius:12px;cursor:pointer;font-weight:600;
-    transition:transform .15s,opacity .15s,box-shadow .15s;
-    box-shadow:0 6px 16px rgba(34,97,238,.18);
+    border:0;
+    background:var(--accent);
+    color:#fff;
+    padding:10px 14px;
+    border-radius:12px;
+    cursor:pointer;
+    font-weight:700;
+    transition:transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+    box-shadow:0 10px 20px rgba(14,165,164,.24);
   }
   .btn:hover{ transform: translateY(-1px); }
-  .btn.secondary{ background:#eef3fb; color:#0b4ea9; box-shadow:none; }
-  .btn.danger{ background:#b3261e; color:#fff; }
+  .btn.secondary{
+    background:#fff4e6;
+    color:#9a3412;
+    border:1px solid #f5d0a6;
+    box-shadow:none;
+  }
+  .btn.ghost{
+    background:transparent;
+    color:var(--ink);
+    border:1px solid var(--bd);
+    box-shadow:none;
+  }
+  .btn.danger{
+    background:var(--danger);
+    color:#fff;
+    box-shadow:0 10px 18px rgba(185,28,28,.2);
+  }
+  .btn.small{ padding:8px 12px; font-weight:600; }
 
   .input, select, input[type="file"]{
     width:100%;
     border:1px solid var(--bd);
-    background:#fff; color:var(--ink);
-    border-radius:12px; padding:10px 12px; outline:0;
-    transition:border-color .15s, box-shadow .15s;
+    background:#fafafa;
+    color:var(--ink);
+    border-radius:12px;
+    padding:10px 12px;
+    outline:0;
+    transition:border-color .15s, box-shadow .15s, background .15s;
   }
   .input:focus, select:focus, input[type="file"]:focus{
-    border-color:#cfe2ff;
-    box-shadow:0 0 0 3px #cfe2ff55;
+    border-color:rgba(14,165,164,.4);
+    box-shadow:0 0 0 3px rgba(14,165,164,.15);
+    background:#fff;
   }
 
-  .filters{
-    display:grid; grid-template-columns: repeat(12, 1fr);
-    gap:8px; align-items:center;
+  .filters-panel{ display:grid; gap:12px; }
+  .panel-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
   }
-  .filters .q,.filters .cat,.filters .sub,.filters .subsub,.filters .go{ grid-column:1 / -1; }
-  @media (min-width:920px){
-    .filters .q{ grid-column: 1 / -1; }
-    .filters .cat{ grid-column: 1 / 5; }
-    .filters .sub{ grid-column: 5 / 9; }
-    .filters .subsub{ grid-column: 9 / 12; }
-    .filters .go{ grid-column: 12 / 13; }
+  .panel-title{ font-weight:700; font-size:16px; }
+  .panel-sub{ color:var(--muted); font-size:12px; }
+  .panel-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .filters-grid{
+    display:grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap:10px;
+    align-items:center;
+  }
+  .filters-grid .q,
+  .filters-grid .cat,
+  .filters-grid .sub,
+  .filters-grid .subsub{ grid-column:1 / -1; }
+  @media (min-width:980px){
+    .filters-grid .q{ grid-column:1 / 13; }
+    .filters-grid .cat{ grid-column:1 / 4; }
+    .filters-grid .sub{ grid-column:4 / 7; }
+    .filters-grid .subsub{ grid-column:7 / 10; }
+  }
+
+  .section-grid{ display:grid; gap:12px; }
+  @media (min-width:1040px){
+    .section-grid{ grid-template-columns: 1.1fr .9fr; align-items:start; }
   }
 
   .form-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px; }
-  .form-grid > label{ display:block; font-size:13px; color:#555; }
+  .form-grid > label{ display:block; font-size:13px; color:#4b5563; }
   .form-grid > label > .input,
   .form-grid > label > select,
   .form-grid > label > input[type="file"]{ margin-top:6px; }
   .form-grid .form-actions{ grid-column: 1 / -1; display:flex; flex-wrap:wrap; gap:8px; }
 
-  .pill{ display:inline-block; padding:4px 10px; border-radius:999px; background:#f6f7fb; border:1px solid #eee; color:#333; font-weight:600; font-size:12px; }
+  .pill{
+    display:inline-block;
+    padding:4px 10px;
+    border-radius:999px;
+    background:#f8fafc;
+    border:1px solid #e5e7eb;
+    color:#374151;
+    font-weight:600;
+    font-size:12px;
+  }
 
-  .table-wrap{ overflow-x:auto; -webkit-overflow-scrolling: touch; }
-  table.table{ width:100%; border-collapse:separate; border-spacing:0 8px; min-width:720px; }
-  .table thead th{ text-align:start; font-size:12px; color:#667; font-weight:700; padding:0 10px 6px; white-space:nowrap; }
-  .table tbody tr{ background:#fff; border:1px solid var(--bd); border-radius:12px; }
-  .table tbody tr > td{ padding:10px; border-top:1px solid var(--bd); white-space:nowrap; }
-  .table tbody tr > td:first-child{ border-start-start-radius:12px; border-end-start-radius:12px; border-right:0; position: sticky; inset-inline-start: 0; background: #fff; z-index: 1; }
-  .table tbody tr > td:last-child{ border-start-end-radius:12px; border-end-end-radius:12px; border-left:0; }
+  .table-wrap{
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    background:#f8fafc;
+    border:1px solid var(--bd);
+    border-radius:16px;
+    padding:8px;
+  }
+  table.table{ width:100%; border-collapse:separate; border-spacing:0 10px; min-width:760px; }
+  .table thead th{
+    text-align:start;
+    font-size:12px;
+    color:var(--muted);
+    font-weight:700;
+    padding:0 10px 6px;
+    white-space:nowrap;
+  }
+  .table tbody tr{
+    background:#fff;
+    border:1px solid var(--bd);
+    border-radius:14px;
+    box-shadow:0 6px 16px rgba(15,23,42,.06);
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .table tbody tr:hover{ transform: translateY(-2px); box-shadow:0 10px 24px rgba(15,23,42,.08); }
+  .table tbody tr > td{
+    padding:10px;
+    border-top:1px solid var(--bd);
+    white-space:nowrap;
+  }
+  .table tbody tr > td:first-child{
+    border-start-start-radius:14px;
+    border-end-start-radius:14px;
+    border-right:0;
+    position: sticky;
+    inset-inline-start: 0;
+    background: #fff;
+    z-index: 1;
+  }
+  .table tbody tr > td:last-child{
+    border-start-end-radius:14px;
+    border-end-end-radius:14px;
+    border-left:0;
+  }
 
-  .img-thumb{width:44px;height:44px;object-fit:cover;border-radius:10px;border:1px solid var(--bd)}
+  .img-thumb{width:46px;height:46px;object-fit:cover;border-radius:12px;border:1px solid var(--bd)}
 
-  .alert-ok{ background:#ecfdf5; border:1px solid #c7f3e3; }
-  .alert-err{ background:#fef2f2; border:1px solid #f9cccc; }
+  .alert-ok{ background:#ecfdf5; border:1px solid #c7f3e3; color:#065f46; }
+  .alert-err{ background:#fef2f2; border:1px solid #f9cccc; color:#991b1b; }
 
   .row-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .pagination{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-top:12px; }
+  .pagination .btn{ padding:8px 12px; }
+  .pagination .btn.active{ background:#111827; color:#fff; box-shadow:none; }
 
-  /* ✅ ما نخفيش SKU على الموبايل */
+  /* Keep SKU visible on mobile */
   @media (max-width:640px){
+    .page-head{ align-items:flex-start; flex-direction:column; }
     .col-image, .col-reorder, .col-sub, .col-subsub { display:none; }
     .btn{ padding:8px 12px; border-radius:10px; }
     .img-thumb{ width:40px; height:40px; }
@@ -514,17 +720,22 @@ if(isset($_GET['edit'])){
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap:10px;
   }
-  .barcode-options label{ font-size:13px; color:#555; }
+  .barcode-options label{ font-size:13px; color:#4b5563; }
   .barcode-preview{
     margin-top:12px;
-    border:1px dashed #d7dbe8;
+    border:1px dashed #cbd5f5;
     background:#fff;
-    border-radius:12px;
-    padding:10px;
+    border-radius:14px;
+    padding:12px;
     text-align:center;
   }
   .barcode-preview svg{ max-width:100%; height:auto; }
   .barcode-hint{ margin-top:8px; font-size:12px; color:var(--muted); }
+
+  @keyframes riseIn{
+    from{ opacity:0; transform: translateY(8px); }
+    to{ opacity:1; transform: translateY(0); }
+  }
 
   :root{
     --barcode-page-width: 40mm;
@@ -535,8 +746,10 @@ if(isset($_GET['edit'])){
     @page{ size: var(--barcode-page-width) var(--barcode-page-height); margin: 0; }
     html, body{ width: var(--barcode-page-width); height: var(--barcode-page-height); }
     body{ background:#fff; margin:0; }
-    .container > *:not(.barcode-print-area){ display:none !important; }
-    .barcode-print-area{ box-shadow:none; border:0; }
+    .container > *{ display:none !important; }
+    .section-grid{ display:block !important; }
+    .section-grid > *{ display:none !important; }
+    .barcode-print-area{ display:block !important; box-shadow:none; border:0; }
     .barcode-print-area{ width: var(--barcode-page-width); height: var(--barcode-page-height); margin:0 auto; }
     .barcode-print-area .barcode-box-head,
     .barcode-print-area .barcode-options,
@@ -550,35 +763,67 @@ if(isset($_GET['edit'])){
 
 <div class="container">
 
-  <h2>الأصناف</h2>
-  <a class="btn" href="/3zbawyh/public/dashboard.php">عودة للوحة</a>
-
-  <?php if($msg): ?><div class="card alert-ok"><?=e($msg)?></div><?php endif; ?>
-  <?php if($err): ?><div class="card alert-err">خطأ: <?=e($err)?></div><?php endif; ?>
+  
+  <div class="page-head">
+    <div class="page-title">
+      <div class="eyebrow">إدارة الأصناف</div>
+      <h1>الأصناف</h1>
+      <div class="page-meta">
+        <span class="chip">الإجمالي: <?=(int)$totalItems?></span>
+        <span class="chip">الصفحة <?=(int)$page?> / <?=(int)$totalPages?></span>
+      </div>
+    </div>
+    <div class="page-actions">
+      <a class="btn ghost" href="/3zbawyh/public/dashboard.php">عودة للوحة</a>
+    </div>
+  </div>
+  <?php if($msg): ?><div class="card alert-ok card-animate"><?=e($msg)?></div><?php endif; ?>
+  <?php if($err): ?><div class="card alert-err card-animate">خطأ: <?=e($err)?></div><?php endif; ?>
 
   <!-- Filters -->
-  <form method="get" class="card filters">
-    <input class="input q" name="q" value="<?=e($q)?>" placeholder="بحث بالاسم<?= $hasSKU ? '/الكود':'' ?>">
-    <select class="input cat" id="f_category" name="category_id" <?= $hasCatId? '':'disabled' ?>>
-      <option value=""><?= $hasCatId? 'كل التصنيفات':'التصنيفات غير مفعّلة' ?></option>
-      <?php foreach($cats as $c): ?>
-        <option value="<?=$c['id']?>" <?= ($cat===$c['id'])?'selected':'' ?>><?=e($c['name'])?></option>
-      <?php endforeach; ?>
-    </select>
-    <select class="input sub" id="f_subcategory" name="subcategory_id" <?= $hasSubcatId? '':'disabled' ?>>
-      <option value="">كل الفروع</option>
-    </select>
-    <select class="input subsub" id="f_sub_subcategory" name="sub_subcategory_id" <?= $hasSubSubId? '':'disabled' ?>>
-      <option value="">كل الفرعي الفرعي</option>
-    </select>
-    <button class="btn go">بحث</button>
+  <form method="get" class="card filters-panel card-animate">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">بحث وتصفية</div>
+        <div class="panel-sub">اختر التصنيف أو ابحث بالاسم/الكود</div>
+      </div>
+      <div class="panel-actions">
+        <button class="btn" type="submit">بحث</button>
+        <a class="btn ghost" href="?">مسح</a>
+      </div>
+    </div>
+    <div class="filters-grid">
+      <input class="input q" name="q" value="<?=e($q)?>" placeholder="بحث بالاسم<?= $hasSKU ? '/الكود':'' ?>">
+      <select class="input cat" id="f_category" name="category_id" <?= $hasCatId? '':'disabled' ?>>
+        <option value=""><?= $hasCatId? 'كل التصنيفات':'التصنيفات غير مفعلة' ?></option>
+        <?php foreach($cats as $c): ?>
+          <option value="<?=$c['id']?>" <?= ($cat===$c['id'])?'selected':'' ?>><?=e($c['name'])?></option>
+        <?php endforeach; ?>
+      </select>
+      <select class="input sub" id="f_subcategory" name="subcategory_id" <?= $hasSubcatId? '':'disabled' ?>>
+        <option value="">كل الفروع</option>
+      </select>
+      <select class="input subsub" id="f_sub_subcategory" name="sub_subcategory_id" <?= $hasSubSubId? '':'disabled' ?>>
+        <option value="">كل الفرعي الفرعي</option>
+      </select>
+    </div>
   </form>
 
+  <div class="section-grid">
+
   <!-- Form -->
-  <div class="card barcode-card">
-    <h3><?= $editing? 'تعديل صنف':'إضافة صنف' ?></h3>
+  
+  <div class="card barcode-card card-animate">
+      <div class="card-head">
+        <div class="card-title">
+          <h3><?= $editing? 'تعديل صنف':'إضافة صنف' ?></h3>
+          <p>أضف بيانات الصنف بسرعة ودقة</p>
+        </div>
+        <?php if($editing): ?><span class="chip">وضع التعديل</span><?php endif; ?>
+      </div>
 
     <form method="post" class="form-grid" enctype="multipart/form-data">
+
       <input type="hidden" name="action" value="<?= $editing? 'update':'create' ?>">
       <?php if($editing): ?><input type="hidden" name="id" value="<?=$editing['id']?>"><?php endif; ?>
       <?php if($hasSKU): ?><input type="hidden" name="sku" id="item_sku" value="<?=e($editing['sku'] ?? '')?>"><?php endif; ?>
@@ -661,12 +906,16 @@ if(isset($_GET['edit'])){
 
   <!-- ✅ Barcode Standalone Card (admin/owner فقط) -->
   <?php if($showSkuGenerator): ?>
-    <div class="card barcode-standalone barcode-print-area">
-      <div class="barcode-box-head">
-        <h3 style="margin:0">الباركود</h3>
+    
+    <div class="card barcode-standalone barcode-print-area card-animate">
+      <div class="card-head barcode-box-head">
+        <div class="card-title">
+          <h3>الباركود</h3>
+          <p>توليد وطباعة بخطوات سريعة</p>
+        </div>
         <div class="barcode-actions">
           <button class="btn secondary" type="button" id="barcode_generate">توليد</button>
-          <button class="btn secondary" type="button" id="barcode_print">طباعة</button>
+          <button class="btn ghost" type="button" id="barcode_print">طباعة</button>
         </div>
       </div>
 
@@ -703,10 +952,16 @@ if(isset($_GET['edit'])){
     </div>
   <?php endif; ?>
 
-  <!-- List -->
-  <div class="card">
-    <h3>قائمة الأصناف (<?=count($list)?>)</h3>
+  </div>
 
+  <!-- List -->
+  <div class="card card-animate">
+    <div class="card-head">
+      <div class="card-title">
+        <h3>قائمة الأصناف</h3>
+        <p>إجمالي <?=(int)$totalItems?> صنف - صفحة <?=(int)$page?> من <?=(int)$totalPages?></p>
+      </div>
+    </div>
     <div class="table-wrap">
       <table class="table">
         <thead>
@@ -801,12 +1056,35 @@ if(isset($_GET['edit'])){
 
       </table>
     </div>
+
+    <?php if($totalPages > 1): ?>
+      <div class="pagination">
+        <?php if($page > 1): ?>
+          <a class="btn secondary" href="<?= $pageBase . ($page - 1) ?>">السابق</a>
+        <?php else: ?>
+          <span class="btn secondary" style="opacity:.5;pointer-events:none;">السابق</span>
+        <?php endif; ?>
+
+        <?php for($p=1; $p<=$totalPages; $p++): ?>
+          <?php if($p == $page): ?>
+            <span class="btn active"><?= $p ?></span>
+          <?php else: ?>
+            <a class="btn secondary" href="<?= $pageBase . $p ?>"><?= $p ?></a>
+          <?php endif; ?>
+        <?php endfor; ?>
+
+        <?php if($page < $totalPages): ?>
+          <a class="btn secondary" href="<?= $pageBase . ($page + 1) ?>">التالي</a>
+        <?php else: ?>
+          <span class="btn secondary" style="opacity:.5;pointer-events:none;">التالي</span>
+        <?php endif; ?>
+      </div>
+    <?php endif; ?>
   </div>
 
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
 <script>
 /** تعبئة الفرعيات */
 async function fillSubcats(selectCat, selectSub, selectedId){
@@ -909,8 +1187,6 @@ const barcodePreview = document.getElementById('barcode_preview');
 const itemSkuInput = document.getElementById('item_sku');
 const editingItemId = <?= json_encode($editing['id'] ?? null) ?>;
 let isPrinting = false;
-const LABEL_WIDTH_MM = 40;
-const LABEL_HEIGHT_MM = 30;
 
 function buildBarcodeValue() {
   if (!barcodeType || !barcodeNumber || !barcodeCost) return '';
@@ -990,66 +1266,6 @@ if (barcodeBtn && barcodeValue) {
       await saveSkuForEditing(val);
     }
   });
-}
-
-function mmToIn(mm){ return mm / 25.4; }
-
-function svgToPngBase64(svgEl, widthMm, heightMm, dpi = 300){
-  return new Promise((resolve, reject) => {
-    const serializer = new XMLSerializer();
-    const svgString = serializer.serializeToString(svgEl);
-    const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
-    const img = new Image();
-    img.onload = () => {
-      const pxW = Math.round(mmToIn(widthMm) * dpi);
-      const pxH = Math.round(mmToIn(heightMm) * dpi);
-      const canvas = document.createElement('canvas');
-      canvas.width = pxW;
-      canvas.height = pxH;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return reject(new Error('Canvas context unavailable'));
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, pxW, pxH);
-      const scale = Math.min(pxW / img.width, pxH / img.height);
-      const w = img.width * scale;
-      const h = img.height * scale;
-      const x = (pxW - w) / 2;
-      const y = (pxH - h) / 2;
-      ctx.drawImage(img, x, y, w, h);
-      const dataUrl = canvas.toDataURL('image/png');
-      resolve(dataUrl.split(',')[1]);
-    };
-    img.onerror = reject;
-    img.src = svgDataUrl;
-  });
-}
-
-async function tryQzPrint(svgEl){
-  if (!window.qz) return false;
-  try{
-    if (!qz.websocket.isActive()) {
-      await qz.websocket.connect();
-    }
-    let printer = null;
-    try{
-      printer = await qz.printers.find('XP-233B');
-    }catch(e){}
-    if (!printer) {
-      printer = await qz.printers.getDefault();
-    }
-    if (!printer) throw new Error('No default printer');
-    const config = qz.configs.create(printer, {
-      size: { width: LABEL_WIDTH_MM, height: LABEL_HEIGHT_MM, unit: 'mm' },
-      scaleContent: true,
-      copies: 1
-    });
-    const pngBase64 = await svgToPngBase64(svgEl, LABEL_WIDTH_MM, LABEL_HEIGHT_MM);
-    await qz.print(config, [{ type: 'image', format: 'base64', data: pngBase64 }]);
-    return true;
-  }catch(e){
-    console.warn('QZ print failed, falling back to browser print.', e);
-    return false;
-  }
 }
 
 async function printBarcodeOnly() {
