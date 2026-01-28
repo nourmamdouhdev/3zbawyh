@@ -42,15 +42,15 @@ $menu=$db->query("
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>طباعة ليبل China Post 40×30</title>
+<title>طباعة ليبل China Post 40×20</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 
 <style>
 :root{
-  --label-w:1.57in; /* 40mm */
-  --label-h:1.18in; /* 30mm */
+  --label-w:40mm;
+  --label-h:20mm;
   --pri:#ff7a1a;
   --pri-2:#1c4ed8;
   --bg:#f7f3ea;
@@ -250,7 +250,7 @@ body{
   color:var(--muted);
 }
 
-/* ===== PRINT (40?30mm) ===== */
+/* ===== PRINT (40×20mm) ===== */
 @media print{
   @page{ size:var(--label-w) var(--label-h); margin:0 }
   html,body{
@@ -258,6 +258,9 @@ body{
     height:var(--label-h);
     margin:0;
     background:#fff;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+    overflow:hidden;
   }
   .container>*:not(.print-only){display:none!important}
   .print-only{
@@ -268,19 +271,39 @@ body{
     justify-content:center;
   }
 
+  .preview-head{
+    display:none!important;
+  }
+
   .label-preview{
     border:0;
     width:100%;
     height:100%;
-    padding:0.03in;
-    transform: scale(1.25);
-    transform-origin: top center;
+    padding:1mm 1.5mm;
+    gap:.6mm;
+    box-sizing:border-box;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
   }
 
   svg{
     width:100%;
     height:auto;
-    max-height:0.55in;
+    max-height:8.5mm;
+    display:block;
+    margin:0 auto;
+  }
+  .label-code{
+    font-size:3.2mm;
+    line-height:1.1;
+    font-weight:800;
+    direction:ltr;
+  }
+  .label-name{
+    font-size:2.4mm;
+    line-height:1.1;
+    font-weight:700;
   }
 }
 </style>
@@ -292,7 +315,7 @@ body{
   <div class="topbar">
     <div>
       <h1 class="title">طباعة الباركود</h1>
-      <div class="subtitle">اختيار سريع للصنف وطباعة ليبل 40×30 مم</div>
+  <div class="subtitle">اختيار سريع للصنف وطباعة ليبل 40×20 مم</div>
     </div>
     <a class="btn ghost" href="/3zbawyh/public/dashboard.php">رجوع للوحة التحكم</a>
   </div>
@@ -310,9 +333,9 @@ body{
     <div class="preview-head">
       <div>
         <div class="eyebrow">معاينة الباركود</div>
-        <div class="muted">جاهز للطباعة 40×30 مم</div>
+        <div class="muted">جاهز للطباعة 40×20 مم</div>
       </div>
-      <div class="size-pill">40×30</div>
+      <div class="size-pill">40×20</div>
     </div>
     <div class="label-preview">
       <svg id="barcode"></svg>
@@ -361,8 +384,8 @@ function draw(code){
 
   JsBarcode(barcode, code.toUpperCase(), {
     format:'CODE39',
-    width:2.1,
-    height:60,
+    width:2.0,
+    height:45,
     displayValue:false,
     margin:0
   });
