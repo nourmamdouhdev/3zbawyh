@@ -113,7 +113,8 @@ $latestInvoices = safe_fetch(function() use($db,$dateCol,$LINE_TOT,$CUSTOMER_NAM
     /* NAV */
     .nav{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:16px;background:linear-gradient(120deg,#0f172a,#1f2937);color:#fff;box-shadow:var(--shadow)}
     .brand{display:flex;align-items:center;gap:10px;font-weight:800}
-    .brand .logo{width:28px;height:28px;border-radius:8px;background:#fff1;border:1px solid #ffffff22;display:grid;place-items:center}
+    .brand .logo{width:30px;height:30px;border-radius:8px;overflow:hidden;background:#fff1;border:1px solid #ffffff22;display:grid;place-items:center}
+    .brand .logo img{width:100%;height:100%;object-fit:contain;display:block}
     .nav ul{display:flex;gap:10px;list-style:none;margin:0;padding:0;flex-wrap:wrap}
     .nav a{color:#fff;text-decoration:none;padding:8px 12px;border-radius:10px}
     .nav a:hover{background:#ffffff1a}
@@ -161,7 +162,7 @@ $latestInvoices = safe_fetch(function() use($db,$dateCol,$LINE_TOT,$CUSTOMER_NAM
   <nav class="nav">
     <div class="brand">
       <span class="logo">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="4" stroke="white" stroke-opacity=".7"/><path d="M7 13l3 3 7-7" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+        <img src="/3zbawyh/public/icons/elezbawiya.png" alt="Elezbawiya logo">
       </span>
       <span>العزباوية</span>
     </div>
@@ -239,7 +240,10 @@ $latestInvoices = safe_fetch(function() use($db,$dateCol,$LINE_TOT,$CUSTOMER_NAM
     <div class="muted">الوقت الآن: <?=e(now_egypt())?></div>
   </div>
 
-  <footer class="footer"><small>© <?=date('Y')?> العزباوية</small></footer>
+  <footer class="footer">
+    <small>© <?=date('Y')?> العزباوية</small>
+    <div>Made by Systemize</div>
+  </footer>
 </div>
 </body>
 </html>
