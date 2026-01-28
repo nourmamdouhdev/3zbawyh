@@ -15,6 +15,7 @@ function has_col(PDO $db,$t,$c){
 
 if(!table_exists($db,'items')){ die('جدول items غير موجود.'); }
 $hasSKU = has_col($db,'items','sku');
+$hasPrice = has_col($db,'items','unit_price');
 
 /* ===== AJAX search ===== */
 if(($_GET['ajax'] ?? '') === 'search'){
@@ -23,7 +24,9 @@ if(($_GET['ajax'] ?? '') === 'search'){
   if($q===''){ echo json_encode(['ok'=>true,'items'=>[]]); exit; }
 
   $st=$db->prepare("
-    SELECT id,name,".($hasSKU?"sku":"NULL AS sku")."
+    SELECT id,name,
+      ".($hasSKU?"sku":"NULL AS sku").",
+      ".($hasPrice?"unit_price":"NULL AS unit_price")."
     FROM items WHERE name LIKE ? LIMIT 60
   ");
   $st->execute(['%'.$q.'%']);
@@ -33,7 +36,9 @@ if(($_GET['ajax'] ?? '') === 'search'){
 
 /* ===== Menu ===== */
 $menu=$db->query("
-  SELECT id,name,".($hasSKU?"sku":"NULL AS sku")."
+  SELECT id,name,
+    ".($hasSKU?"sku":"NULL AS sku").",
+    ".($hasPrice?"unit_price":"NULL AS unit_price")."
   FROM items ORDER BY id DESC LIMIT 120
 ")->fetchAll(PDO::FETCH_ASSOC);
 ?>
@@ -42,7 +47,7 @@ $menu=$db->query("
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>طباعة ليبل China Post 40×20</title>
+<title>توليد كود للطباعة ليبل China Post 40×20</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -249,6 +254,55 @@ body{
   font-weight:700;
   color:var(--muted);
 }
+.label-text{
+  margin-top:8px;
+  width:100%;
+  min-height:48px;
+  padding:8px 10px;
+  border-radius:12px;
+  border:1px dashed #ffd3b0;
+  background:#fff7ed;
+  color:#7a3400;
+  font-size:12px;
+  font-weight:700;
+  direction:ltr;
+  text-align:left;
+  word-break:break-all;
+  resize:none;
+  font-family:"Courier New", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+.label-actions{
+  display:flex;
+  gap:8px;
+  justify-content:center;
+  margin-top:8px;
+}
+.label-actions .btn{
+  padding:8px 12px;
+  border-radius:10px;
+  font-size:12px;
+}
+.toast{
+  position:fixed;
+  right:18px;
+  bottom:18px;
+  background:#111;
+  color:#fff;
+  padding:10px 14px;
+  border-radius:12px;
+  font-size:12px;
+  font-weight:800;
+  opacity:0;
+  transform:translateY(6px);
+  transition:opacity .2s ease, transform .2s ease;
+  box-shadow:0 12px 30px rgba(0,0,0,.2);
+  z-index:999;
+  pointer-events:none;
+}
+.toast.show{
+  opacity:1;
+  transform:translateY(0);
+}
 
 /* ===== PRINT (40×20mm) ===== */
 @media print{
@@ -305,6 +359,14 @@ body{
     line-height:1.1;
     font-weight:700;
   }
+  .label-text{
+    margin-top:.6mm;
+    min-height:auto;
+    padding:.6mm .8mm;
+    font-size:2mm;
+  }
+  .label-actions{display:none!important}
+  .toast{display:none!important}
 }
 </style>
 </head>
@@ -314,8 +376,8 @@ body{
 
   <div class="topbar">
     <div>
-      <h1 class="title">طباعة الباركود</h1>
-  <div class="subtitle">اختيار سريع للصنف وطباعة ليبل 40×20 مم</div>
+      <h1 class="title">توليد كود للطباعة الباركود</h1>
+  <div class="subtitle">اختيار سريع للصنف وتوليد كود للطباعة ليبل 40×20 مم</div>
     </div>
     <a class="btn ghost" href="/3zbawyh/public/dashboard.php">رجوع للوحة التحكم</a>
   </div>
@@ -325,7 +387,7 @@ body{
       <label for="q">بحث سريع</label>
       <input id="q" placeholder="ابحث باسم الصنف أو SKU..." autocomplete="off">
     </div>
-    <button class="btn" id="printBtn" disabled>طباعة الليبل</button>
+    <button class="btn" id="generateBtn" disabled>توليد كود للطباعة الليبل</button>
     <span class="chip" id="selectedSku">SKU: —</span>
   </div>
 
@@ -333,7 +395,7 @@ body{
     <div class="preview-head">
       <div>
         <div class="eyebrow">معاينة الباركود</div>
-        <div class="muted">جاهز للطباعة 40×20 مم</div>
+        <div class="muted">جاهز لتوليد كود للطباعة 40×20 مم</div>
       </div>
       <div class="size-pill">40×20</div>
     </div>
@@ -341,6 +403,10 @@ body{
       <svg id="barcode"></svg>
       <div class="label-code" id="labelCode">—</div>
       <div class="label-name" id="labelName">—</div>
+      <textarea class="label-text" id="labelText" rows="2" readonly>—</textarea>
+      <div class="label-actions">
+        <button class="btn secondary" id="copyBtn" type="button" disabled>Copy</button>
+      </div>
     </div>
   </div>
 
@@ -353,7 +419,8 @@ body{
       <?php foreach($menu as $m): ?>
         <button class="item-btn"
           data-name="<?=e($m['name'])?>"
-          data-sku="<?=e($m['sku']??'')?>">
+          data-sku="<?=e($m['sku']??'')?>"
+          data-price="<?=e($m['unit_price']??'')?>">
 
           <?=e($m['name'])?><br>
           <small><?= $hasSKU?'SKU: '.e($m['sku']??'—'):'SKU غير مفعّل' ?></small>
@@ -365,19 +432,32 @@ body{
 
 </div>
 
+  <div class="toast" id="copyToast" role="status" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script>
 const menu = document.getElementById('menu');
 const barcode = document.getElementById('barcode');
-const printBtn = document.getElementById('printBtn');
+const generateBtn = document.getElementById('generateBtn');
 const labelCode = document.getElementById('labelCode');
 const labelName = document.getElementById('labelName');
+const labelText = document.getElementById('labelText');
+const copyBtn = document.getElementById('copyBtn');
+const copyToast = document.getElementById('copyToast');
 const searchInput = document.getElementById('q');
 const selectedSku = document.getElementById('selectedSku');
 const emptyState = document.getElementById('emptyState');
 const menuButtons = menu ? Array.from(menu.querySelectorAll('.item-btn')) : [];
 
-let currentSKU = '', currentName = '';
+let currentSKU = '', currentName = '', currentPrice = '';
+let toastTimer;
+
+function showToast(message){
+  if(!copyToast) return;
+  copyToast.textContent = message;
+  copyToast.classList.add('show');
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => copyToast.classList.remove('show'), 1400);
+}
 
 function draw(code){
   if(!code){ barcode.innerHTML=''; return; }
@@ -391,13 +471,29 @@ function draw(code){
   });
 }
 
+function normalizePrice(value){
+  const raw = String(value ?? '').trim();
+  if(!raw) return '';
+  if(!/^-?\d+(\.\d+)?$/.test(raw)) return raw;
+  return raw.replace(/(\.\d*?)0+$/,'$1').replace(/\.$/,'');
+}
+
+function buildLabelText(){
+  if(!currentSKU) return '—';
+  const price = normalizePrice(currentPrice);
+  const name = currentName || '';
+  return `LABEL|code=${currentSKU}|name=${name}|price=${price}`;
+}
+
 function updateLabels(){
   labelCode.textContent = currentSKU || '—';
   labelName.textContent = currentName || '—';
+  if(labelText) labelText.value = buildLabelText();
   if(selectedSku){
     selectedSku.textContent = currentSKU ? `SKU: ${currentSKU}` : 'SKU: —';
   }
-  printBtn.disabled = !currentSKU;
+  if(generateBtn) generateBtn.disabled = !currentSKU;
+  if(copyBtn) copyBtn.disabled = !currentSKU;
 }
 
 function setActive(btn){
@@ -421,6 +517,7 @@ menu.addEventListener('click', e => {
   if(!b) return;
   currentSKU = b.dataset.sku || '';
   currentName = b.dataset.name || '';
+  currentPrice = b.dataset.price || '';
   draw(currentSKU);
   updateLabels();
   setActive(b);
@@ -429,7 +526,38 @@ menu.addEventListener('click', e => {
 if(searchInput) searchInput.addEventListener('input', filterMenu);
 filterMenu();
 updateLabels();
-printBtn.onclick = () => window.print();
+if(generateBtn){
+  generateBtn.onclick = () => {
+    if(!labelText || !labelText.value || labelText.value === '—') return;
+    labelText.focus();
+    labelText.select();
+    let copied = false;
+    try { copied = document.execCommand('copy'); } catch (e) {}
+    if(copied) showToast('تم النسخ');
+  };
+}
+
+if(copyBtn){
+  copyBtn.onclick = async () => {
+    if(!labelText || !labelText.value || labelText.value === '—') return;
+    const text = labelText.value;
+    let copied = false;
+    if(navigator.clipboard?.writeText){
+      try{ await navigator.clipboard.writeText(text); copied = true; }catch(e){}
+    }
+    if(!copied){
+      labelText.focus();
+      labelText.select();
+      try { copied = document.execCommand('copy'); } catch (e) {}
+    }
+    if(copied){
+      const original = copyBtn.textContent;
+      copyBtn.textContent = 'تم النسخ';
+      showToast('تم النسخ');
+      setTimeout(() => { copyBtn.textContent = original; }, 1200);
+    }
+  };
+}
 </script>
 </body>
 </html>

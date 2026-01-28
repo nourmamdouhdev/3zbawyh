@@ -224,11 +224,6 @@ body {
       </ul>
     </aside>
   </main>
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/3zbawyh/public/service-worker.js');
-}
-</script>
 </body>
 
 </html>

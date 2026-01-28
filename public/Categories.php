@@ -510,6 +510,7 @@ tbody tr:last-child td{border-bottom:none}
 }
 .search-row .input{min-width:200px;flex:1}
 </style>
+<link rel="stylesheet" href="/3zbawyh/assets/barcode_theme.css">
 </head>
 <body>
 <div class="container">

@@ -456,6 +456,7 @@ if(isset($_GET['edit'])){
     color: var(--ink);
     font-family: sans-serif;
     line-height:1.65;
+    font-weight:400;
     min-height:100vh;
   }
   body::before,
@@ -499,6 +500,8 @@ if(isset($_GET['edit'])){
     margin:6px 0 8px;
     font-size:28px;
     font-family:sans-serif;
+    font-weight:600;
+    color:var(--ink);
   }
   .page-meta{
     display:flex;
@@ -539,6 +542,8 @@ if(isset($_GET['edit'])){
     margin:0;
     font-size:18px;
     font-family:"Marhey","Tajawal",sans-serif;
+    font-weight:600;
+    color:var(--ink);
   }
   .card-title p{
     margin:4px 0 0;
@@ -548,20 +553,21 @@ if(isset($_GET['edit'])){
 
   .btn{
     border:0;
-    background:var(--accent);
-    color:#fff;
-    padding:10px 14px;
+    background:var(--pri);
+    color:#111;
+    padding:8px 12px;
     border-radius:12px;
     cursor:pointer;
     font-weight:700;
     transition:transform .15s ease, box-shadow .15s ease, opacity .15s ease;
-    box-shadow:0 10px 20px rgba(14,165,164,.24);
+    box-shadow:0 10px 20px rgba(255,122,26,.25);
+    font-size:13px;
   }
   .btn:hover{ transform: translateY(-1px); }
   .btn.secondary{
-    background:#fff4e6;
-    color:#9a3412;
-    border:1px solid #f5d0a6;
+    background:#fff;
+    color:var(--pri-2);
+    border:1px solid #d9e3ff;
     box-shadow:none;
   }
   .btn.ghost{
@@ -571,7 +577,7 @@ if(isset($_GET['edit'])){
     box-shadow:none;
   }
   .btn.danger{
-    background:var(--danger);
+    background:#b91c1c;
     color:#fff;
     box-shadow:0 10px 18px rgba(185,28,28,.2);
   }
@@ -645,7 +651,7 @@ if(isset($_GET['edit'])){
 
   .table-wrap{
     overflow-x:auto;
-    -webkit-overflow-scrolling:touch;
+
     background:#f8fafc;
     border:1px solid var(--bd);
     border-radius:16px;
@@ -758,6 +764,7 @@ if(isset($_GET['edit'])){
     .barcode-print-area .barcode-preview svg{ width:100%; height:auto; max-height:22mm; }
   }
 </style>
+<link rel="stylesheet" href="/3zbawyh/assets/barcode_theme.css">
 </head>
 <body>
 

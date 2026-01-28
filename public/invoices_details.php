@@ -511,6 +511,7 @@ $rows = $st->fetchAll(PDO::FETCH_ASSOC);
     table.table{font-size:11px;}
   }
 </style>
+<link rel="stylesheet" href="/3zbawyh/assets/barcode_theme.css">
 
 </head>
 <body>

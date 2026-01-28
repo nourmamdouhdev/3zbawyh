@@ -141,6 +141,7 @@ $rows = $pdo->query("
     @media (max-width: 980px){.form-grid{grid-template-columns: 1fr 1fr}.action-form{grid-template-columns:1fr}}
     @media (max-width: 600px){.page{padding:10px}.form-grid{grid-template-columns:1fr}}
   </style>
+  <link rel="stylesheet" href="/3zbawyh/assets/barcode_theme.css">
 </head>
 <body>
 <div class="page">

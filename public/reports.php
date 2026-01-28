@@ -221,6 +221,7 @@ $customers = $db->query("SELECT id, ".(in_array('name',$cCols,true)?'name':(in_a
     .pill{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid #e5e7eb;background:#f8fafc;font-size:12px}
     .section-title{margin:0 0 8px}
   </style>
+  <link rel="stylesheet" href="/3zbawyh/assets/barcode_theme.css">
 </head>
 <body>
 <div class="container">
