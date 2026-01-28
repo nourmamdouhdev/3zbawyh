@@ -96,6 +96,7 @@ function nf($n){ return number_format((float)$n, 2); }
 html, body{ margin:0; padding:0; }
 body{
   width: var(--receipt-width);
+  max-width: var(--receipt-width);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
   font-size: var(--font-size);
   line-height: var(--line-height);
@@ -222,17 +223,12 @@ body{
 <!-- أدوات المتصفح -->
 <div class="no-print center">
   <button onclick="window.print()">طباعة</button>
-  <button onclick="setWidth('58mm')">58mm</button>
-  <button onclick="setWidth('80mm')">80mm</button>
   <label class="small">
     <input type="checkbox" id="closeAfterPrint" checked> إغلاق بعد الطباعة
   </label>
 </div>
 
 <script>
-function setWidth(w){
-  document.documentElement.style.setProperty('--receipt-width', w);
-}
 function autoPrint(){
   window.print();
   if (document.getElementById('closeAfterPrint').checked) {

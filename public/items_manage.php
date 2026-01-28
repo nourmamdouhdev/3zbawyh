@@ -917,9 +917,11 @@ if(isset($_GET['edit'])){
         <label>نوع المنتج
           <select class="input" id="barcode_type" name="barcode_type">
             <option value="">— اختر —</option>
-            <option value="n">n - neckles</option>
-            <option value="a">a - ansyal</option>
-            <option value="r">r - ring</option>
+            <option value="N">N - سلسلة</option>
+            <option value="B">B - إنسيال</option>
+            <option value="R">R - خاتم</option>
+            <option value="E">E - حلق</option>
+            <option value="A">A - خلخال</option>
           </select>
         </label>
 
