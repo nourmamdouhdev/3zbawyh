@@ -94,6 +94,7 @@ $latestInvoices = safe_fetch(function() use($db,$dateCol,$LINE_TOT,$CUSTOMER_NAM
   <title>اللوحة الرئيسية - العزباوية</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/3zbawyh/assets/style.css">
+  <link rel="icon" type="image/png" href="icons/favicon.png">
   <style>
     :root{
       --bg:#f6f7fb; --card:#fff; --text:#0f172a; --muted:#6b7280;

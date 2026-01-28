@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/helpers.php';
 require_once __DIR__ . '/../models/Items.php';
@@ -83,6 +83,42 @@ function normalize_method($m){
   if ($m === 'agyl') return 'agel';
   $allowed = ['cash','visa','instapay','vodafone_cash','agel','mixed'];
   return in_array($m, $allowed, true) ? $m : 'mixed';
+}
+
+function max_discount_percent_for_user(array $u): ?float {
+  $db = db();
+  $max = null;
+  if (column_exists($db, 'users', 'max_discount_percent')) {
+    $st = $db->prepare("SELECT max_discount_percent FROM users WHERE id=?");
+    $st->execute([$u['id'] ?? 0]);
+    $val = $st->fetchColumn();
+    if ($val !== null && $val !== '') {
+      $max = max(0, min(100, (float)$val));
+    }
+  }
+
+  if ($max === null) {
+    $role = strtolower($u['role'] ?? '');
+    if ($role === 'cashier' || $role === 'chasier') {
+      $max = 20;
+    } elseif ($role === 'manger' || $role === 'manager') {
+      $max = 30;
+    }
+  }
+
+  return $max;
+}
+
+function assert_discount_limit(array $lines, float $discount, ?float $maxDiscPercent): void {
+  if ($maxDiscPercent === null) return;
+  $subtotalTmp = 0.0;
+  foreach ($lines as $ln) {
+    $subtotalTmp += (float)$ln['qty'] * (float)$ln['unit_price'];
+  }
+  $maxDiscAmount = $subtotalTmp * ($maxDiscPercent / 100);
+  if ($discount - $maxDiscAmount > 0.01) {
+    throw new Exception('الخصم أكبر من الحد المسموح به.');
+  }
 }
 
 /*
@@ -374,6 +410,7 @@ if ($q !== '') {
           throw new Exception('Bad line');
         }
       }
+      assert_discount_limit($lines, $discount, max_discount_percent_for_user($u));
 
       // ✅ سماح بالقيم الجديدة + تطبيع
       $pm = normalize_method($body['payment_method'] ?? 'cash');
@@ -422,6 +459,7 @@ if ($q !== '') {
 
       $discount = (float)($data['discount'] ?? 0);
       $tax      = (float)($data['tax'] ?? 0);
+      assert_discount_limit($lines, $discount, max_discount_percent_for_user($u));
       $pays     = $data['payments'] ?? [];
       if (!is_array($pays) || !count($pays)) throw new Exception('لا توجد مدفوعات');
 
@@ -521,24 +559,7 @@ if ($q !== '') {
         ];
       }, $cart);
 
-      // ✅ حد الخصم حسب الدور (نسبة مئوية من الإجمالي قبل الخصم)
-      $role = strtolower($u['role'] ?? '');
-      $maxDiscPercent = null;
-      if ($role === 'cashier' || $role === 'chasier') {
-        $maxDiscPercent = 20;
-      } elseif ($role === 'manger' || $role === 'manager') {
-        $maxDiscPercent = 30;
-      }
-      if ($maxDiscPercent !== null) {
-        $subtotalTmp = 0.0;
-        foreach ($lines as $ln) {
-          $subtotalTmp += (float)$ln['qty'] * (float)$ln['unit_price'];
-        }
-        $maxDiscAmount = $subtotalTmp * ($maxDiscPercent / 100);
-        if ($discount - $maxDiscAmount > 0.01) {
-          throw new Exception('الخصم أكبر من الحد المسموح به للدور الحالي.');
-        }
-      }
+      assert_discount_limit($lines, $discount, max_discount_percent_for_user($u));
 
       $total      = calc_total_from_lines($lines, $discount, $tax);
       $change_due = validate_payments_rules($pays, $total);

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/helpers.php';
+require_once __DIR__ . '/../app/config/db.php';
 
 require_login();
 require_role_in_or_redirect(['admin','cashier','Manger']);
@@ -13,10 +14,21 @@ $__customer_skipped = $_SESSION['pos_flow']['customer_skipped'] ?? false;
 $u = current_user();
 $role = strtolower($u['role'] ?? '');
 $max_disc_percent = null;
-if ($role === 'cashier' || $role === 'chasier') {
-  $max_disc_percent = 20;
-} elseif ($role === 'manger' || $role === 'manager') {
-  $max_disc_percent = 30;
+$db = db();
+if (column_exists($db, 'users', 'max_discount_percent')) {
+  $st = $db->prepare("SELECT max_discount_percent FROM users WHERE id=?");
+  $st->execute([$u['id']]);
+  $val = $st->fetchColumn();
+  if ($val !== null && $val !== '') {
+    $max_disc_percent = max(0, min(100, (float)$val));
+  }
+}
+if ($max_disc_percent === null) {
+  if ($role === 'cashier' || $role === 'chasier') {
+    $max_disc_percent = 20;
+  } elseif ($role === 'manger' || $role === 'manager') {
+    $max_disc_percent = 30;
+  }
 }
 ?>
 <!DOCTYPE html>
