@@ -15,7 +15,8 @@ function has_col(PDO $db,$t,$c){
 
 if(!table_exists($db,'items')){ die('جدول items غير موجود.'); }
 $hasSKU = has_col($db,'items','sku');
-$hasPrice = has_col($db,'items','unit_price');
+$hasUnitPrice = has_col($db,'items','unit_price');
+$hasWholesale = has_col($db,'items','price_wholesale');
 
 /* ===== AJAX search ===== */
 if(($_GET['ajax'] ?? '') === 'search'){
@@ -26,7 +27,8 @@ if(($_GET['ajax'] ?? '') === 'search'){
   $st=$db->prepare("
     SELECT id,name,
       ".($hasSKU?"sku":"NULL AS sku").",
-      ".($hasPrice?"unit_price":"NULL AS unit_price")."
+      ".($hasUnitPrice?"unit_price":"NULL AS unit_price").",
+      ".($hasWholesale?"price_wholesale":"NULL AS price_wholesale")."
     FROM items WHERE name LIKE ? LIMIT 60
   ");
   $st->execute(['%'.$q.'%']);
@@ -38,7 +40,8 @@ if(($_GET['ajax'] ?? '') === 'search'){
 $menu=$db->query("
   SELECT id,name,
     ".($hasSKU?"sku":"NULL AS sku").",
-    ".($hasPrice?"unit_price":"NULL AS unit_price")."
+    ".($hasUnitPrice?"unit_price":"NULL AS unit_price").",
+    ".($hasWholesale?"price_wholesale":"NULL AS price_wholesale")."
   FROM items ORDER BY id DESC LIMIT 120
 ")->fetchAll(PDO::FETCH_ASSOC);
 ?>
@@ -417,10 +420,18 @@ body{
     </div>
     <div class="grid" id="menu">
       <?php foreach($menu as $m): ?>
+        <?php
+          $priceLabel = '';
+          if ($hasWholesale && isset($m['price_wholesale']) && (float)$m['price_wholesale'] > 0) {
+            $priceLabel = $m['price_wholesale'];
+          } elseif ($hasUnitPrice) {
+            $priceLabel = $m['unit_price'] ?? '';
+          }
+        ?>
         <button class="item-btn"
           data-name="<?=e($m['name'])?>"
           data-sku="<?=e($m['sku']??'')?>"
-          data-price="<?=e($m['unit_price']??'')?>">
+          data-price="<?=e($priceLabel)?>">
 
           <?=e($m['name'])?><br>
           <small><?= $hasSKU?'SKU: '.e($m['sku']??'—'):'SKU غير مفعّل' ?></small>
