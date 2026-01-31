@@ -42,7 +42,7 @@ $menu=$db->query("
     ".($hasSKU?"sku":"NULL AS sku").",
     ".($hasUnitPrice?"unit_price":"NULL AS unit_price").",
     ".($hasWholesale?"price_wholesale":"NULL AS price_wholesale")."
-  FROM items ORDER BY id DESC LIMIT 120
+  FROM items ORDER BY id DESC LIMIT 10000000000
 ")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
