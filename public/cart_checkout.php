@@ -154,6 +154,28 @@ body{
 .summary .inputs{
   display:grid;grid-template-columns: 1fr 1fr;gap:8px;margin-top:10px
 }
+.credit-box{
+  margin-top:10px;
+  border:1px dashed var(--bd);
+  border-radius:12px;
+  padding:10px;
+  background:#f8fafc;
+}
+.credit-box .line{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap
+}
+.credit-box .small{
+  font-size:12px;color:var(--muted)
+}
+.credit-box .credit-fields{
+  display:none;
+  margin-top:8px;
+  grid-template-columns: 1fr 1fr;
+  gap:8px;
+}
+@media (max-width: 520px){
+  .credit-box .credit-fields{grid-template-columns:1fr}
+}
 
 /* ===== Payments ===== */
 .payments .payrow{
@@ -259,6 +281,29 @@ body{
         </label>
       </div>
 
+      <div class="credit-box">
+        <div class="line">
+          <label style="display:flex;align-items:center;gap:8px;font-weight:800">
+            <input type="checkbox" id="creditToggle"> سداد جزئي + الباقي آجل
+          </label>
+          <span class="small">الآجل ليس طريقة دفع</span>
+        </div>
+        <div id="creditFields" class="credit-fields">
+          <label class="muted" style="font-size:13px">
+            موعد السداد (اختياري)
+            <input id="creditDue" class="input" type="date" style="width:100%;margin-top:6px">
+          </label>
+          <label class="muted" style="font-size:13px">
+            ملاحظة (اختياري)
+            <input id="creditNote" class="input" type="text" placeholder="مثال: دفع على دفعات" style="width:100%;margin-top:6px">
+          </label>
+        </div>
+        <div class="small" style="margin-top:6px">ادفع أي مبلغ الآن بأي طريقة، والباقي يُسجّل آجل تلقائيًا. يمكن ترك موعد السداد فارغًا ليظل مفتوحًا.</div>
+        <div class="pill" style="margin-top:8px;justify-content:space-between">
+          <b>المتبقي آجل</b><span id="creditRemaining">0.00</span>
+        </div>
+      </div>
+
       <div class="divider"></div>
 
       <div class="payments">
@@ -287,6 +332,20 @@ const MAX_DISC_PERCENT = <?= $max_disc_percent === null ? 'null' : (int)$max_dis
 
 const el  = s=>document.querySelector(s);
 const fmt = n=>{ n=parseFloat(n||0); return isNaN(n)?'0.00':n.toFixed(2); };
+
+const CREDIT_TOGGLE = el('#creditToggle');
+const CREDIT_FIELDS = el('#creditFields');
+const CREDIT_DUE = el('#creditDue');
+const CREDIT_NOTE = el('#creditNote');
+const CREDIT_REMAINING = el('#creditRemaining');
+const isCredit = ()=> CREDIT_TOGGLE && CREDIT_TOGGLE.checked;
+
+if (CREDIT_TOGGLE) {
+  CREDIT_TOGGLE.addEventListener('change', ()=>{
+    if (CREDIT_FIELDS) CREDIT_FIELDS.style.display = CREDIT_TOGGLE.checked ? 'grid' : 'none';
+    sumPayments();
+  });
+}
 
 function api(action, params={}){
   const q = new URLSearchParams(params).toString();
@@ -388,7 +447,6 @@ function paymentRow(method='cash', amount='', ref=''){
       <option value="visa">Visa / بطاقة</option>
       <option value="instapay">InstaPay</option>
       <option value="vodafone_cash">Vodafone Cash</option>
-      <option value="agyl">آجل (دفعة مؤجلة)</option>
     </select>
     <input class="input amount" placeholder="المبلغ" inputmode="decimal">
     <input class="input ref" placeholder="رقم العملية / المرجع">
@@ -440,6 +498,7 @@ function getPaymentsFromUI(){
 function sumPayments(){
   const total = parseFloat(document.querySelector('#grand').textContent||'0') || 0;
   const pays = getPaymentsFromUI();
+  const credit = isCredit();
 
   // مرجع إجباري لمدفوعات Instapay و Vodafone Cash
   const missingRef = pays.find(p =>
@@ -463,13 +522,25 @@ function sumPayments(){
   const overpay = sum - total;
   const overpayAllowed = Math.abs(overpay - changeDue) < 0.01;
 
-  if (Math.abs(sum - total) > 0.009 && !overpayAllowed) {
-    showPayError(`المدفوع (${sum.toFixed(2)}) لا يساوي الإجمالي (${total.toFixed(2)}). الزيادة مسموحة فقط لو من "كاش" وتتحول لباقي.`);
+  if (!credit) {
+    if (Math.abs(sum - total) > 0.009 && !overpayAllowed) {
+      showPayError(`المدفوع (${sum.toFixed(2)}) لا يساوي الإجمالي (${total.toFixed(2)}). الزيادة مسموحة فقط لو من "كاش" وتتحول لباقي.`);
+    } else {
+      clearPayError();
+    }
   } else {
-    clearPayError();
+    if ((sum - total) > 0.009 && !overpayAllowed) {
+      showPayError(`المدفوع (${sum.toFixed(2)}) أكبر من الإجمالي (${total.toFixed(2)}). الزيادة مسموحة فقط لو من "كاش" وتتحول لباقي.`);
+    } else {
+      clearPayError();
+    }
   }
 
   updatePaidSum(pays, total, changeDue);
+  if (CREDIT_REMAINING) {
+    const rem = credit ? Math.max(0, total - sum) : 0;
+    CREDIT_REMAINING.textContent = rem.toFixed(2);
+  }
 }
 
 function updatePaidSum(pays, total, changeDue=0){
@@ -489,7 +560,8 @@ el('#finish').onclick = ()=>{
 
   const total = parseFloat(el('#grand').textContent||'0') || 0;
   const pays  = getPaymentsFromUI();
-  if (!pays.length) return alert('أضف طريقة دفع واحدة على الأقل.');
+  const credit = isCredit();
+  if (!credit && !pays.length) return alert('أضف طريقة دفع واحدة على الأقل.');
 
   // تحقق من المراجع المطلوبة
   for (const p of pays) {
@@ -506,8 +578,14 @@ el('#finish').onclick = ()=>{
   const changeDue = Math.max(0, cashSum - Math.max(0, remainingAfterNonCash));
   const overpay = sum - total;
   const overpayAllowed = Math.abs(overpay - changeDue) < 0.01;
-  if (Math.abs(sum - total) > 0.009 && !overpayAllowed) {
-    return alert('مجموع المدفوعات لا يساوي الإجمالي (الزيادة مسموحة فقط لو كاش وتتحول لباقي).');
+  if (!credit) {
+    if (Math.abs(sum - total) > 0.009 && !overpayAllowed) {
+      return alert('مجموع المدفوعات لا يساوي الإجمالي (الزيادة مسموحة فقط لو كاش وتتحول لباقي).');
+    }
+  } else {
+    if ((sum - total) > 0.009 && !overpayAllowed) {
+      return alert('مجموع المدفوعات أكبر من الإجمالي (الزيادة مسموحة فقط لو كاش وتتحول لباقي).');
+    }
   }
 
   apiPost('cart_checkout_multi_legacy', {
@@ -515,7 +593,10 @@ el('#finish').onclick = ()=>{
     tax: +el('#tax').value||0,
     payments: pays,
     customer_name:  CUSTOMER_NAME || '',
-    customer_phone: CUSTOMER_PHONE || ''
+    customer_phone: CUSTOMER_PHONE || '',
+    credit: credit ? 1 : 0,
+    credit_due_date: CREDIT_DUE ? (CREDIT_DUE.value||'') : '',
+    credit_note: CREDIT_NOTE ? (CREDIT_NOTE.value||'') : ''
   }).then(r=>{
     if(!r.ok){ alert(r.error||'فشل الحفظ'); return; }
     if (r.print_url) window.open(r.print_url,'_blank');
@@ -524,6 +605,12 @@ el('#finish').onclick = ()=>{
     loadCart();
     el('#paymentsArea').innerHTML=''; addPayment('cash','', '');
     el('#discount').value='0'; el('#tax').value='0'; refreshTotals();
+    if (CREDIT_TOGGLE) {
+      CREDIT_TOGGLE.checked = false;
+      if (CREDIT_FIELDS) CREDIT_FIELDS.style.display = 'none';
+      if (CREDIT_DUE) CREDIT_DUE.value = '';
+      if (CREDIT_NOTE) CREDIT_NOTE.value = '';
+    }
   });
 };
 

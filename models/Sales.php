@@ -22,7 +22,7 @@ class Sales
     private static function normalizePM(?string $pm): string {
         $pm = strtolower(trim((string)$pm));
         if ($pm === 'agyl') $pm = 'agel';
-        $allowed = ['cash','visa','instapay','vodafone_cash','agel','mixed'];
+        $allowed = ['cash','visa','instapay','vodafone_cash','agel','credit','mixed'];
         return in_array($pm, $allowed, true) ? $pm : 'mixed';
     }
 
@@ -33,15 +33,29 @@ class Sales
         if ($name === '' && $phone === '') return null;
 
         if ($phone !== '') {
-            $q = $db->prepare("SELECT id FROM customers WHERE phone = ? LIMIT 1");
-            $q->execute([$phone]);
-            $id = $q->fetchColumn();
-            if ($id) {
-                if ($name !== '') {
-                    $upd = $db->prepare("UPDATE customers SET name = COALESCE(NULLIF(?,''), name) WHERE id=?");
-                    $upd->execute([$name, $id]);
+            $digits = preg_replace('/\D+/', '', $phone);
+            $variants = [];
+            if ($digits !== '') $variants[] = $digits;
+            if (strlen($digits) === 11 && strpos($digits, '01') === 0) {
+                $variants[] = '2'.$digits; // 010... -> 2010...
+            }
+            if (strlen($digits) === 12 && strpos($digits, '20') === 0) {
+                $variants[] = '0'.substr($digits, 2); // 2010... -> 010...
+            }
+            $variants = array_values(array_unique($variants));
+
+            $expr = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone,'+',''),' ',''),'-',''),'(',''),')','')";
+            foreach ($variants as $v) {
+                $q = $db->prepare("SELECT id FROM customers WHERE phone IS NOT NULL AND $expr = ? LIMIT 1");
+                $q->execute([$v]);
+                $id = $q->fetchColumn();
+                if ($id) {
+                    if ($name !== '') {
+                        $upd = $db->prepare("UPDATE customers SET name = COALESCE(NULLIF(?,''), name) WHERE id=?");
+                        $upd->execute([$name, $id]);
+                    }
+                    return (int)$id;
                 }
-                return (int)$id;
             }
         }
         $ins = $db->prepare("INSERT INTO customers (name, phone, created_at) VALUES (?, ?, NOW())");
@@ -76,28 +90,38 @@ class Sales
 
             // الدفع
             $pm = self::normalizePM($payment['payment_method'] ?? 'cash');
+            $is_credit = !empty($payment['is_credit']) || $pm === 'agel' || $pm === 'credit';
+            $paid_amount_override = isset($payment['paid_amount_override']) ? (float)$payment['paid_amount_override'] : null;
 
             $paid_amount  = 0.0;          // إجمالي المقبوض
             $change_due   = 0.0;          // الباقي نقدًا
             $payment_ref  = null;         // مرجع التحويل (لو موجود)
             $payment_note = null;         // ملاحظات (قد تحتوي MULTI;...)
 
-            if ($pm === 'cash') {
-                // كاش فقط: لازم يدفع >= الإجمالي، والباقي يسجّل change
+            if ($is_credit) {
+                $paid_amount = $paid_amount_override !== null ? $paid_amount_override : (float)($payment['paid_cash'] ?? 0);
+                if ($paid_amount < 0) $paid_amount = 0.0;
+                if ($paid_amount > $total) $paid_amount = $total;
+                $change_due   = max(0, (float)($payment['change_due'] ?? 0));
+                $payment_ref  = trim((string)($payment['payment_ref'] ?? '')) ?: null;
+                $payment_note = trim((string)($payment['payment_note'] ?? '')) ?: null;
+
+            } elseif ($pm === 'cash') {
+                // ??? ???: ???? ???? >= ????????? ??????? ?????? change
                 $paid_cash  = (float)($payment['paid_cash']  ?? 0);
                 $change_due = max(0, (float)($payment['change_due'] ?? ($paid_cash - $total)));
                 if ($paid_cash + 1e-6 < $total) {
-                    throw new Exception('المبلغ النقدي أقل من الإجمالي.');
+                    throw new Exception('?????? ?????? ??? ?? ????????.');
                 }
                 $paid_amount = $paid_cash;
 
-            } elseif ($pm === 'instapay' || $pm === 'visa' || $pm === 'vodafone_cash' || $pm === 'agel') {
-                // طريقة واحدة غير كاش (أو آجل): نعتبر الفاتورة Paid بالكامل (التحقق تم في الـAPI)
-                // مرجع مطلوب لِـ Instapay و Vodafone Cash
+            } elseif ($pm === 'instapay' || $pm === 'visa' || $pm === 'vodafone_cash') {
+                // ????? ????? ??? ???: ????? ???????? Paid ??????? (?????? ?? ?? ???API)
+                // ???? ????? ?? Instapay ? Vodafone Cash
                 if ($pm === 'instapay' || $pm === 'vodafone_cash') {
                     $payment_ref = trim((string)($payment['payment_ref'] ?? ''));
                     if ($payment_ref === '') {
-                        throw new Exception('مرجع التحويل مطلوب لـ InstaPay/Vodafone Cash.');
+                        throw new Exception('???? ??????? ????? ?? InstaPay/Vodafone Cash.');
                     }
                 } else {
                     $payment_ref = trim((string)($payment['payment_ref'] ?? '')) ?: null;
@@ -107,14 +131,14 @@ class Sales
                 $change_due   = 0.0;
 
             } else { // mixed
-                // دفع مُجزّأ: نعتمد القيم القادمة من الـAPI بعد التحقق هناك
+                // ??? ??????: ????? ????? ??????? ?? ???API ??? ?????? ????
                 $paid_cash    = (float)($payment['paid_cash'] ?? 0);
                 $change_due   = max(0, (float)($payment['change_due'] ?? 0));
-                $payment_ref  = trim((string)($payment['payment_ref'] ?? '')) ?: null;  // أول مرجع غير كاش إن وجد
-                $payment_note = trim((string)($payment['payment_note'] ?? '')) ?: null; // غالبًا MULTI;method,amount,...
+                $payment_ref  = trim((string)($payment['payment_ref'] ?? '')) ?: null;  // ??? ???? ??? ??? ?? ???
+                $payment_note = trim((string)($payment['payment_note'] ?? '')) ?: null; // ?????? MULTI;method,amount,...
 
-                // بما إن الـAPI متأكد إن إجمالي المدفوعات يساوي الإجمالي (+/− الباقي من الكاش فقط)
-                // فنسجل الفاتورة Paid بالكامل:
+                // ??? ?? ???API ????? ?? ?????? ????????? ????? ???????? (+/? ?????? ?? ????? ???)
+                // ????? ???????? Paid ???????:
                 $paid_amount  = $total;
             }
 
@@ -146,6 +170,27 @@ class Sales
                 ':notes'          => $notes ?: null,
             ]);
             $invoice_id = (int)$db->lastInsertId();
+
+            if ($is_credit) {
+                try {
+                    $sets = [];
+                    $vals = [];
+                    if (column_exists($db, 'sales_invoices', 'is_credit')) {
+                        $sets[] = "is_credit=1";
+                    }
+                    if (column_exists($db, 'sales_invoices', 'credit_due_date')) {
+                        $due = $payment['credit_due_date'] ?? null;
+                        $due = ($due === '' ? null : $due);
+                        $sets[] = "credit_due_date=?";
+                        $vals[] = $due;
+                    }
+                    if ($sets) {
+                        $vals[] = $invoice_id;
+                        $db->prepare("UPDATE sales_invoices SET ".implode(',', $sets)." WHERE id=?")
+                           ->execute($vals);
+                    }
+                } catch (Throwable $e) { }
+            }
 
             // تفاصيل الأصناف + تحديث المخزون
             $insLine = $db->prepare("

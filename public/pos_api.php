@@ -127,7 +127,7 @@ function assert_discount_limit(array $lines, float $discount, ?float $maxDiscPer
   - InstaPay و Vodafone Cash مرجع إجباري.
   - الزيادة مسموحة فقط لو من الكاش (بترجع كباقي).
 */
-function validate_payments_rules(array &$pays, float $total){
+function validate_payments_rules(array &$pays, float $total, bool $allowPartial=false){
   // مراجع إجبارية لـ InstaPay و Vodafone Cash
   foreach ($pays as $p) {
     $method = strtolower(trim((string)($p['method'] ?? '')));
@@ -152,11 +152,30 @@ function validate_payments_rules(array &$pays, float $total){
   $overpay = $sum - $total;
   $overpayAllowed = abs($overpay - $changeDue) < 0.01;
 
-  if (abs($sum - $total) > 0.009 && !$overpayAllowed) {
-    throw new Exception('مجموع المدفوعات لا يساوي الإجمالي. الزيادة مسموحة فقط لو كاش (تُحسب كباقي).');
+  if (!$allowPartial) {
+    if (abs($sum - $total) > 0.009 && !$overpayAllowed) {
+      throw new Exception('مجموع المدفوعات لا يساوي الإجمالي. الزيادة مسموحة فقط لو كاش (تُحسب كباقي).');
+    }
+  } else {
+    if (($sum - $total) > 0.009 && !$overpayAllowed) {
+      throw new Exception('المدفوع أكبر من الإجمالي. الزيادة مسموحة فقط لو كاش (تُحسب كباقي).');
+    }
   }
 
   return $changeDue;
+}
+
+function ensure_credit_columns(PDO $db): void {
+  try {
+    if (!column_exists($db, 'sales_invoices', 'is_credit')) {
+      $db->exec("ALTER TABLE sales_invoices ADD COLUMN is_credit TINYINT(1) NOT NULL DEFAULT 0");
+    }
+  } catch (Throwable $e) {}
+  try {
+    if (!column_exists($db, 'sales_invoices', 'credit_due_date')) {
+      $db->exec("ALTER TABLE sales_invoices ADD COLUMN credit_due_date DATE NULL");
+    }
+  } catch (Throwable $e) {}
 }
 
 /**
@@ -460,11 +479,22 @@ if ($q !== '') {
       $discount = (float)($data['discount'] ?? 0);
       $tax      = (float)($data['tax'] ?? 0);
       assert_discount_limit($lines, $discount, max_discount_percent_for_user($u));
+      $isCredit = !empty($data['credit']);
+      $creditDue = trim((string)($data['credit_due_date'] ?? ''));
+      $creditNote = trim((string)($data['credit_note'] ?? ''));
       $pays     = $data['payments'] ?? [];
-      if (!is_array($pays) || !count($pays)) throw new Exception('لا توجد مدفوعات');
+      if (!is_array($pays)) $pays = [];
+      if (!$isCredit && !count($pays)) throw new Exception('لا توجد مدفوعات');
 
       $total      = calc_total_from_lines($lines, $discount, $tax);
-      $change_due = validate_payments_rules($pays, $total);
+      $change_due = validate_payments_rules($pays, $total, $isCredit);
+      $paid_sum   = 0.0;
+      foreach ($pays as $p) $paid_sum += (float)($p['amount'] ?? 0);
+      $paid_amount_override = max(0, $paid_sum - $change_due);
+
+      if ($isCredit) {
+        ensure_credit_columns(db());
+      }
 
       // 🔁 Override من الواجهة لو متوفر
       $save_override         = normalize_method($data['save_payment_method'] ?? '');
@@ -476,7 +506,9 @@ if ($q !== '') {
       $payment_ref  = '';
       $payment_note = '';
 
-      if (count($pays) === 1) {
+      if (count($pays) === 0) {
+        $normMethod = 'agel';
+      } elseif (count($pays) === 1) {
         $p = $pays[0];
         $normMethod = normalize_method($p['method'] ?? 'cash');
         if ($normMethod === 'cash') {
@@ -505,6 +537,9 @@ if ($q !== '') {
       if ($save_override && $save_override !== 'mixed') {
         $normMethod = $save_override;
       }
+      if ($isCredit) {
+        $normMethod = 'agel';
+      }
       if ($payment_note_override !== '') {
         $payment_note = $payment_note_override;
       }
@@ -516,13 +551,16 @@ if ($q !== '') {
         $lines,
         $discount,
         $tax,
-        '',
+        $creditNote,
         [
           'payment_method' => $normMethod,
           'paid_cash'      => $paid_cash,
           'change_due'     => $change_due,
           'payment_ref'    => $payment_ref,
           'payment_note'   => $payment_note,
+          'is_credit'      => $isCredit ? 1 : 0,
+          'credit_due_date'=> $creditDue !== '' ? $creditDue : null,
+          'paid_amount_override' => $isCredit ? $paid_amount_override : null,
         ]
       );
 
@@ -540,8 +578,12 @@ if ($q !== '') {
 
       $discount = (float)($body['discount'] ?? 0);
       $tax      = (float)($body['tax'] ?? 0);
+      $isCredit = !empty($body['credit']);
+      $creditDue = trim((string)($body['credit_due_date'] ?? ''));
+      $creditNote = trim((string)($body['credit_note'] ?? ''));
       $pays     = $body['payments'] ?? [];
-      if (!is_array($pays) || !count($pays)) throw new Exception('لا توجد مدفوعات');
+      if (!is_array($pays)) $pays = [];
+      if (!$isCredit && !count($pays)) throw new Exception('لا توجد مدفوعات');
 
       // 👇 قراءة اسم ورقم العميل من الواجهة
       $cust_name  = trim((string)($body['customer_name']  ?? ''));
@@ -562,7 +604,14 @@ if ($q !== '') {
       assert_discount_limit($lines, $discount, max_discount_percent_for_user($u));
 
       $total      = calc_total_from_lines($lines, $discount, $tax);
-      $change_due = validate_payments_rules($pays, $total);
+      $change_due = validate_payments_rules($pays, $total, $isCredit);
+      $paid_sum   = 0.0;
+      foreach ($pays as $p) $paid_sum += (float)($p['amount'] ?? 0);
+      $paid_amount_override = max(0, $paid_sum - $change_due);
+
+      if ($isCredit) {
+        ensure_credit_columns(db());
+      }
 
       // 🔁 Override من الواجهة لو متوفر
       $save_override         = normalize_method($body['save_payment_method'] ?? '');
@@ -573,7 +622,9 @@ if ($q !== '') {
       $payment_ref  = '';
       $payment_note = '';
 
-      if (count($pays) === 1) {
+      if (count($pays) === 0) {
+        $normMethod = 'agel';
+      } elseif (count($pays) === 1) {
         $p = $pays[0];
         $normMethod = normalize_method($p['method'] ?? 'cash');
         if ($normMethod === 'cash') {
@@ -598,6 +649,10 @@ if ($q !== '') {
         $payment_note = $encodeMultiPayments($pays);
       }
 
+      if ($isCredit) {
+        $normMethod = 'agel';
+      }
+
       // ✅ تمرير اسم/موبايل العميل لموديل Sales → يتسجّل في جدول customers
       $res = Sales::saveInvoice(
         $u['id'],
@@ -606,13 +661,16 @@ if ($q !== '') {
         $lines,
         $discount,
         $tax,
-        '',
+        $creditNote,
         [
           'payment_method' => $normMethod,
           'paid_cash'      => $paid_cash,
           'change_due'     => $change_due,
           'payment_ref'    => $payment_ref,
           'payment_note'   => $payment_note,
+          'is_credit'      => $isCredit ? 1 : 0,
+          'credit_due_date'=> $creditDue !== '' ? $creditDue : null,
+          'paid_amount_override' => $isCredit ? $paid_amount_override : null,
         ]
       );
 
